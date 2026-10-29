@@ -1,0 +1,35 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f3f7ff;
+  color: #14213d;
+}
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.panel {
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 580px;
+  box-shadow: 0 8px 30px #00000012;
+}
+
+h1 {
+  color: #0866e8;
+}
+
+h2 {
+  margin-top: 32px;
+}

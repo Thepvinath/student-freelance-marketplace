@@ -1,0 +1,42 @@
+
+# Java / Spring Boot
+**/target/
+*.class
+*.log
+
+# Node.js / React
+**/node_modules/
+**/dist/
+**/coverage/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+backend/src/main/resources/application-local.properties
+
+# Editors
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+# Archive files
+*.zip
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Build outputs
+**/node_modules/
+**/target/
+**/dist/
+
+# Local database configuration
+backend/src/main/resources/application-local.properties
