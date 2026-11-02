@@ -1,7 +1,7 @@
 package com.studentfreelance.backend.config;
 
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.DispatcherType;
+import jakarta.servlet.http.HttpServletResponse;
 
 import com.studentfreelance.backend.repository.UserRepository;
 import com.studentfreelance.backend.security.JwtAuthenticationFilter;
@@ -35,101 +35,57 @@ public class SecurityConfig {
             UserRepository userRepository) throws Exception {
 
         http
-            // Stateless REST API
             .csrf(AbstractHttpConfigurer::disable)
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
-
             .sessionManagement(session ->
-                session.sessionCreationPolicy(
-                    SessionCreationPolicy.STATELESS
-                )
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
-
-            // HTTP 401 / 403
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(
-                    new HttpStatusEntryPoint(
-                        HttpStatus.UNAUTHORIZED
-                    )
+                    new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)
                 )
-                .accessDeniedHandler(
-                    (request, response, exception) -> {
-                        response.setStatus(
-                            HttpServletResponse.SC_FORBIDDEN
-                        );
-                    }
-                )
+                .accessDeniedHandler((request, response, exception) -> {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                })
             )
-
-            // API Authorization
             .authorizeHttpRequests(auth -> auth
+                // Do not turn application errors into 401 responses.
+                .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 
-                // Allow Spring Boot to handle API errors
-                .dispatcherTypeMatchers(DispatcherType.ERROR)
-                 .permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/hello").permitAll()
 
-                // Public Authentication APIs
-                .requestMatchers(
-                    HttpMethod.POST, "/api/auth/register"
-                ).permitAll()
+                .requestMatchers("/api/test/student").hasRole("STUDENT")
+                .requestMatchers("/api/test/employer").hasRole("EMPLOYER")
+                .requestMatchers("/api/test/admin").hasRole("ADMIN")
 
-                .requestMatchers(
-                    HttpMethod.POST, "/api/auth/login"
-                ).permitAll()
-
-                // Public Test API
-                .requestMatchers(
-                    HttpMethod.GET, "/api/hello"
-                ).permitAll()
-
-                // Role Test APIs
-                .requestMatchers("/api/test/student")
+                // Applications: deny students access to employer applicant lists.
+                .requestMatchers(HttpMethod.POST, "/api/jobs/*/applications")
                     .hasRole("STUDENT")
-
-                .requestMatchers("/api/test/employer")
+                .requestMatchers(HttpMethod.GET, "/api/applications/mine")
+                    .hasRole("STUDENT")
+                .requestMatchers(HttpMethod.GET, "/api/jobs/*/applications")
+                    .hasRole("EMPLOYER")
+                .requestMatchers(HttpMethod.PATCH, "/api/applications/*/status")
                     .hasRole("EMPLOYER")
 
-                .requestMatchers("/api/test/admin")
-                    .hasRole("ADMIN")
-
-                // Employer: view own jobs
-                .requestMatchers(
-                    HttpMethod.GET, "/api/jobs/mine"
-                ).hasRole("EMPLOYER")
-
-                // Public: browse OPEN jobs
-                .requestMatchers(
-                    HttpMethod.GET,
-                    "/api/jobs",
-                    "/api/jobs/*"
-                ).permitAll()
-
-                // Employer: create jobs
-                .requestMatchers(
-                    HttpMethod.POST, "/api/jobs"
-                ).hasRole("EMPLOYER")
-
-                // Employer: update jobs
-                .requestMatchers(
-                    HttpMethod.PUT, "/api/jobs/*"
-                ).hasRole("EMPLOYER")
-
-                // Employer: mark jobs as FILLED
-                .requestMatchers(
-                    HttpMethod.PATCH, "/api/jobs/*/fill"
-                ).hasRole("EMPLOYER")
-
-                // Deny all unspecified requests
+                // Employers may manage only their own jobs (checked by JobPostService).
+                .requestMatchers(HttpMethod.GET, "/api/jobs/mine")
+                    .hasRole("EMPLOYER")
+                .requestMatchers(HttpMethod.GET, "/api/jobs", "/api/jobs/*")
+                    .permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/jobs")
+                    .hasRole("EMPLOYER")
+                .requestMatchers(HttpMethod.PUT, "/api/jobs/*")
+                    .hasRole("EMPLOYER")
+                .requestMatchers(HttpMethod.PATCH, "/api/jobs/*/fill")
+                    .hasRole("EMPLOYER")
                 .anyRequest().denyAll()
             )
-
-            // JWT Authentication Filter
             .addFilterBefore(
-                new JwtAuthenticationFilter(
-                    jwtService,
-                    userRepository
-                ),
+                new JwtAuthenticationFilter(jwtService, userRepository),
                 UsernamePasswordAuthenticationFilter.class
             );
 
