@@ -82,6 +82,13 @@ public class SecurityConfig {
                     .hasRole("EMPLOYER")
                 .requestMatchers(HttpMethod.PATCH, "/api/jobs/*/fill")
                     .hasRole("EMPLOYER")
+
+                // Profile: STUDENT / EMPLOYER view and update their own profile.
+                .requestMatchers(HttpMethod.GET, "/api/profile/me")
+                    .hasAnyRole("STUDENT", "EMPLOYER")
+                .requestMatchers(HttpMethod.PUT, "/api/profile/me")
+                    .hasAnyRole("STUDENT", "EMPLOYER")
+
                 .anyRequest().denyAll()
             )
             .addFilterBefore(
