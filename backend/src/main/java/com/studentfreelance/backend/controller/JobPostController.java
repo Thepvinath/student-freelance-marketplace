@@ -80,6 +80,17 @@ public class JobPostController {
         );
     }
 
+    @PatchMapping("/{id}/complete")
+    public JobPostResponse markCompleted(
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        return jobPostService.markCompleted(
+            id,
+            currentUserId(authentication)
+        );
+    }
+
     private Long currentUserId(Authentication authentication) {
         return Long.valueOf(authentication.getName());
     }

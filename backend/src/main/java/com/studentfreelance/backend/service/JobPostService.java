@@ -2,6 +2,7 @@ package com.studentfreelance.backend.service;
 
 import com.studentfreelance.backend.dto.*;
 import com.studentfreelance.backend.entity.*;
+import com.studentfreelance.backend.repository.ApplicationRepository;
 import com.studentfreelance.backend.repository.JobPostRepository;
 
 import jakarta.persistence.EntityManager;
@@ -17,12 +18,15 @@ import java.util.List;
 public class JobPostService {
 
     private final JobPostRepository repository;
+    private final ApplicationRepository applications;
     private final EntityManager entityManager;
 
     public JobPostService(
             JobPostRepository repository,
+            ApplicationRepository applications,
             EntityManager entityManager) {
         this.repository = repository;
+        this.applications = applications;
         this.entityManager = entityManager;
     }
 
@@ -124,6 +128,37 @@ public class JobPostService {
         }
 
         job.setJobStatus(JobStatus.FILLED);
+
+        return JobPostResponse.from(
+            repository.saveAndFlush(job)
+        );
+    }
+
+    // FR-09: Employer marks own FILLED job as COMPLETED.
+    // Flow: OPEN -> FILLED -> COMPLETED. Requires at least one
+    // APPROVED application (needed later for reviews, FR-10).
+    @Transactional
+    public JobPostResponse markCompleted(
+            Long id, Long employerId) {
+
+        JobPost job = findOwnedJob(id, employerId);
+
+        if (job.getJobStatus() != JobStatus.FILLED) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Only FILLED jobs can be completed"
+            );
+        }
+
+        if (!applications.existsByJobIdAndStatus(
+                id, ApplicationStatus.APPROVED)) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Job has no APPROVED application"
+            );
+        }
+
+        job.setJobStatus(JobStatus.COMPLETED);
 
         return JobPostResponse.from(
             repository.saveAndFlush(job)
