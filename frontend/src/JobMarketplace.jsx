@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import ApplicationCenter, { ApplyJobModal } from './ApplicationCenter.jsx'
+import ProfilePage from './ProfilePage.jsx'
 
 const EMPTY_JOB = {
   title: '',
@@ -139,8 +140,9 @@ function JobForm({ initial, saving, serverError, onCancel, onSave }) {
   )
 }
 
-export default function JobMarketplace({ session, onLogout }) {
+export default function JobMarketplace({ session, onLogout, onProfileSaved }) {
   const employer = session.role === 'EMPLOYER'
+  const hasProfile = session.role === 'STUDENT' || employer
   const [view, setView] = useState('explore')
   const [allJobs, setAllJobs] = useState([])
   const [mine, setMine] = useState([])
@@ -268,8 +270,9 @@ export default function JobMarketplace({ session, onLogout }) {
             <button type="button" className={view === 'explore' ? 'active' : ''} onClick={() => switchView('explore')}>Khám phá việc làm</button>
             {employer && <button type="button" className={view === 'mine' ? 'active' : ''} onClick={() => switchView('mine')}>Tin tuyển dụng của tôi</button>}
             {employer ? <button type="button" className={view === 'candidates' ? 'active' : ''} onClick={() => switchView('candidates')}>Đơn ứng tuyển</button> : <button type="button" className={view === 'applications' ? 'active' : ''} onClick={() => switchView('applications')}>Ứng tuyển của tôi</button>}
+            {hasProfile && <button type="button" className={view === 'profile' ? 'active' : ''} onClick={() => switchView('profile')}>Hồ sơ của tôi</button>}
           </nav>
-          <div className="dashboard-account"><span className="role-label">{employer ? 'Nhà tuyển dụng' : session.role === 'STUDENT' ? 'Sinh viên' : 'Quản trị viên'}</span><span className="profile-initial" title={session.email}>{session.fullName?.slice(0, 1).toUpperCase() || '?'}</span><button type="button" className="signout-button" onClick={onLogout}>Đăng xuất</button></div>
+          <div className="dashboard-account"><span className="role-label">{employer ? 'Nhà tuyển dụng' : session.role === 'STUDENT' ? 'Sinh viên' : 'Quản trị viên'}</span>{hasProfile ? <button type="button" className="profile-initial" title="Hồ sơ của tôi" aria-label="Mở hồ sơ của tôi" onClick={() => switchView('profile')}>{session.fullName?.slice(0, 1).toUpperCase() || '?'}</button> : <span className="profile-initial" title={session.email}>{session.fullName?.slice(0, 1).toUpperCase() || '?'}</span>}<button type="button" className="signout-button" onClick={onLogout}>Đăng xuất</button></div>
         </div>
       </header>
 
@@ -281,7 +284,9 @@ export default function JobMarketplace({ session, onLogout }) {
 
         <div className="content-layout">
           <section className="jobs-section">
-            {(view === 'applications' || view === 'candidates') ? (
+            {view === 'profile' ? (
+              <ProfilePage session={session} onProfileSaved={onProfileSaved} />
+            ) : (view === 'applications' || view === 'candidates') ? (
               <ApplicationCenter session={session} employer={employer} jobs={mine} notice={notice} />
             ) : (<>
             <div className="section-title-row"><div><p className="section-kicker">{view === 'mine' ? 'QUẢN LÝ TUYỂN DỤNG' : 'CƠ HỘI MỚI NHẤT'}</p><h2>{view === 'mine' ? 'Tin tuyển dụng của tôi' : 'Khám phá việc làm'}</h2><p>{view === 'mine' ? 'Xem, chỉnh sửa và quản lý trạng thái các tin đã đăng.' : 'Danh sách tin đang mở từ Spring Boot và MySQL.'}</p></div>{employer && <button type="button" className="primary-button create-job-button" onClick={startCreate}>+ Đăng tin mới</button>}</div>
@@ -294,7 +299,7 @@ export default function JobMarketplace({ session, onLogout }) {
             ) : <div className="job-grid">{visible.map((job) => <JobCard key={job.id} job={job} onOpen={setSelected} showActions={view === 'mine' && employer} onEdit={startEdit} onFill={fillJob} busy={saving} />)}</div>}
             </>)}
           </section>
-          <aside className="dashboard-sidebar"><div className="side-card"><span className="side-icon">✦</span><h3>{employer ? 'Đăng tuyển nhanh' : 'Bắt đầu hành trình'}</h3><p>{employer ? 'Tạo tin tuyển dụng với đầy đủ mô tả, thời gian và mức thù lao.' : 'Tìm kiếm cơ hội việc làm mới, phù hợp với kỹ năng của bạn.'}</p>{employer ? <button className="side-link" type="button" onClick={startCreate}>Tạo tin ngay →</button> : <button className="side-link" type="button" onClick={() => switchView('explore')}>Khám phá việc làm →</button>}</div><div className="side-card side-card-white"><h3>Tài khoản của bạn</h3><dl><div><dt>Họ tên</dt><dd>{session.fullName}</dd></div><div><dt>Email</dt><dd>{session.email}</dd></div><div><dt>Vai trò</dt><dd>{session.role}</dd></div></dl><p className="session-note">Phiên JWT hiện lưu trong bộ nhớ. Tải lại trang sẽ yêu cầu đăng nhập lại.</p></div></aside>
+          <aside className="dashboard-sidebar"><div className="side-card"><span className="side-icon">✦</span><h3>{employer ? 'Đăng tuyển nhanh' : 'Bắt đầu hành trình'}</h3><p>{employer ? 'Tạo tin tuyển dụng với đầy đủ mô tả, thời gian và mức thù lao.' : 'Tìm kiếm cơ hội việc làm mới, phù hợp với kỹ năng của bạn.'}</p>{employer ? <button className="side-link" type="button" onClick={startCreate}>Tạo tin ngay →</button> : <button className="side-link" type="button" onClick={() => switchView('explore')}>Khám phá việc làm →</button>}</div><div className="side-card side-card-white"><h3>Tài khoản của bạn</h3><dl><div><dt>Họ tên</dt><dd>{session.fullName}</dd></div><div><dt>Email</dt><dd>{session.email}</dd></div><div><dt>Vai trò</dt><dd>{session.role}</dd></div></dl>{hasProfile && view !== 'profile' && <button className="side-link" type="button" onClick={() => switchView('profile')}>Cập nhật hồ sơ →</button>}<p className="session-note">Phiên JWT hiện lưu trong bộ nhớ. Tải lại trang sẽ yêu cầu đăng nhập lại.</p></div></aside>
         </div>
       </main>
       <footer className="dashboard-footer">© Student Freelance Marketplace · ReactJS + Spring Boot + MySQL</footer>
