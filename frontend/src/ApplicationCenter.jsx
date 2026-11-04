@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const STATUS_LABELS = {
   PENDING: 'Chờ xét duyệt',
@@ -51,8 +51,26 @@ function cvLink(value) {
 export function ApplyJobModal({ job, token, onCancel, onSuccess }) {
   const [introduction, setIntroduction] = useState('')
   const [cvUrl, setCvUrl] = useState('')
+  const [cvFromProfile, setCvFromProfile] = useState(false)
+  const cvTouched = useRef(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  // FR-04: điền sẵn liên kết CV từ hồ sơ sinh viên (nếu có), sinh viên vẫn sửa được.
+  useEffect(() => {
+    const controller = new AbortController()
+    applicationApi('/api/profile/me', { token, signal: controller.signal })
+      .then((profile) => {
+        // Không ghi đè nếu sinh viên đã tự nhập CV.
+        if (controller.signal.aborted || !profile?.cvUrl || cvTouched.current) return
+        setCvUrl(profile.cvUrl)
+        setCvFromProfile(true)
+      })
+      .catch(() => {
+        // Không có hồ sơ hoặc lỗi mạng: sinh viên tự nhập CV như trước.
+      })
+    return () => controller.abort()
+  }, [token])
 
   async function submit(event) {
     event.preventDefault()
@@ -95,8 +113,8 @@ export function ApplyJobModal({ job, token, onCancel, onSuccess }) {
           </div>
           <div className="field">
             <label htmlFor="apply-cv">Liên kết CV (không bắt buộc)</label>
-            <input id="apply-cv" type="url" maxLength={500} placeholder="https://example.com/my-cv.pdf" value={cvUrl} onChange={(event) => setCvUrl(event.target.value)} />
-            <small>Chỉ lưu đường dẫn CV, chưa hỗ trợ tải tệp lên hệ thống.</small>
+            <input id="apply-cv" type="url" maxLength={500} placeholder="https://example.com/my-cv.pdf" value={cvUrl} onChange={(event) => { cvTouched.current = true; setCvUrl(event.target.value); setCvFromProfile(false) }} />
+            <small>{cvFromProfile ? 'Đã điền sẵn từ hồ sơ của bạn. Bạn có thể sửa nếu cần.' : 'Chỉ lưu đường dẫn CV, chưa hỗ trợ tải tệp lên hệ thống.'}</small>
           </div>
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="modal-actions">

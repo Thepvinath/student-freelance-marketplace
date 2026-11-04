@@ -91,7 +91,14 @@ function App() {
   }
 
   if (session) {
-    return <JobMarketplace session={session} onLogout={signOut} />
+    // onProfileSaved: cập nhật tên hiển thị sau khi lưu hồ sơ (FR-04)
+    return (
+      <JobMarketplace
+        session={session}
+        onLogout={signOut}
+        onProfileSaved={(profile) => setSession((current) => ({ ...current, fullName: profile.fullName }))}
+      />
+    )
   }
 
   return (
