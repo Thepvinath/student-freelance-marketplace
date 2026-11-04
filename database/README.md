@@ -34,3 +34,25 @@ DB_USER, DB_PASSWORD, JWT_SECRET
 ```
 
 Không ghi mật khẩu thật vào file trong repository.
+
+## Dữ liệu demo
+
+File `demo-data.sql` tạo dữ liệu mẫu để demo (chạy **sau** `schema.sql`):
+
+1. MySQL Workbench → `File → Open SQL Script…` → chọn `database/demo-data.sql`
+2. Bấm **Execute** (⚡) → bảng kết quả cuối cùng hiển thị 4 tài khoản demo
+
+| Tài khoản | Vai trò | Ghi chú |
+|---|---|---|
+| `minhanh.demo@example.com` | STUDENT | Nguyễn Minh Anh – Văn Lang, CNTT |
+| `quochuy.demo@example.com` | STUDENT | Trần Quốc Huy – Văn Lang, QTKD |
+| `songmay.demo@example.com` | EMPLOYER | Cà phê Sông Mây – 3 tin tuyển dụng |
+| `anhduong.demo@example.com` | EMPLOYER | Trung tâm Gia sư Ánh Dương – 3 tin tuyển dụng |
+
+Mật khẩu chung: `Demo@2026` (chỉ dùng cho tài khoản demo, lưu dạng BCrypt).
+
+6 tin tuyển dụng `OPEN` thuộc 4 ngành nghề (Dịch vụ ăn uống, Bán lẻ, Giáo dục, Văn phòng),
+2 khu vực (TP. Hồ Chí Minh, Hà Nội) và nhiều mức thù lao để demo tìm kiếm / lọc.
+Không tạo sẵn đơn ứng tuyển – ứng tuyển, duyệt / từ chối và hoàn thành công việc được thực hiện trực tiếp khi demo.
+
+File chỉ dùng `INSERT` có kiểm tra `NOT EXISTS`: an toàn khi chạy lại, không tạo trùng và không thay đổi dữ liệu đã có.
