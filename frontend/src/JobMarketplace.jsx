@@ -18,6 +18,12 @@ function salaryLabel(job) {
   return `${currency.format(Number(job.salaryMin))} – ${currency.format(Number(job.salaryMax))} ₫`
 }
 
+// Khu vực = phần cuối của địa điểm, ví dụ "Quận 7, TP. Hồ Chí Minh" -> "TP. Hồ Chí Minh".
+function areaOf(location) {
+  const parts = String(location || '').split(',').map((part) => part.trim()).filter(Boolean)
+  return parts[parts.length - 1] || ''
+}
+
 function friendlyError(status) {
   if (status === 400) return 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại các trường.'
   if (status === 401) return 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng xuất và đăng nhập lại.'
@@ -148,6 +154,8 @@ export default function JobMarketplace({ session, onLogout, onProfileSaved }) {
   const [mine, setMine] = useState([])
   const [query, setQuery] = useState('')
   const [industry, setIndustry] = useState('all')
+  const [location, setLocation] = useState('all')
+  const [minSalary, setMinSalary] = useState('')
   const [selected, setSelected] = useState(null)
   const [applying, setApplying] = useState(null)
   const [editing, setEditing] = useState(null)
@@ -181,15 +189,29 @@ export default function JobMarketplace({ session, onLogout, onProfileSaved }) {
 
   const list = view === 'mine' && employer ? mine : allJobs
   const industries = useMemo(() => [...new Set(list.map((j) => j.industry).filter(Boolean))].sort(), [list])
+  const locations = useMemo(() => [...new Set(list.map((j) => areaOf(j.location)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [list])
+  // FR-06 / WF-02: lọc theo từ khóa, ngành nghề, địa điểm và mức lương tối thiểu.
+  // Mức lương tối thiểu: giữ các tin có thù lao tối đa >= mức sinh viên mong muốn.
+  const salaryFloor = Number(minSalary)
   const visible = useMemo(() => list.filter((job) => {
     const haystack = `${job.title} ${job.description} ${job.industry} ${job.location}`.toLocaleLowerCase('vi-VN')
-    return haystack.includes(query.toLocaleLowerCase('vi-VN').trim()) && (industry === 'all' || job.industry === industry)
-  }), [list, query, industry])
+    return haystack.includes(query.toLocaleLowerCase('vi-VN').trim())
+      && (industry === 'all' || job.industry === industry)
+      && (location === 'all' || areaOf(job.location) === location)
+      && (!(salaryFloor > 0) || Number(job.salaryMax) >= salaryFloor)
+  }), [list, query, industry, location, salaryFloor])
+  const filtersActive = Boolean(query.trim()) || industry !== 'all' || location !== 'all' || salaryFloor > 0
+
+  function clearFilters() {
+    setQuery('')
+    setIndustry('all')
+    setLocation('all')
+    setMinSalary('')
+  }
 
   function switchView(next) {
     setView(next)
-    setIndustry('all')
-    setQuery('')
+    clearFilters()
     setSelected(null)
     setError('')
     setNotice('')
@@ -232,8 +254,7 @@ export default function JobMarketplace({ session, onLogout, onProfileSaved }) {
       setSelected(null)
       setNotice(update ? 'Đã cập nhật tin tuyển dụng.' : 'Đăng tin thành công! Tin đang ở trạng thái OPEN.')
       setView('mine')
-      setQuery('')
-      setIndustry('all')
+      clearFilters()
       refresh()
     } catch (err) {
       setError(err instanceof TypeError ? 'Không thể kết nối Spring Boot.' : err.message)
@@ -290,12 +311,18 @@ export default function JobMarketplace({ session, onLogout, onProfileSaved }) {
               <ApplicationCenter session={session} employer={employer} jobs={mine} notice={notice} />
             ) : (<>
             <div className="section-title-row"><div><p className="section-kicker">{view === 'mine' ? 'QUẢN LÝ TUYỂN DỤNG' : 'CƠ HỘI MỚI NHẤT'}</p><h2>{view === 'mine' ? 'Tin tuyển dụng của tôi' : 'Khám phá việc làm'}</h2><p>{view === 'mine' ? 'Xem, chỉnh sửa và quản lý trạng thái các tin đã đăng.' : 'Danh sách tin đang mở từ Spring Boot và MySQL.'}</p></div>{employer && <button type="button" className="primary-button create-job-button" onClick={startCreate}>+ Đăng tin mới</button>}</div>
-            <div className="jobs-toolbar"><label className="search-wrap"><span aria-hidden="true">⌕</span><input type="search" aria-label="Tìm công việc" placeholder="Tìm theo tên việc, lĩnh vực, địa điểm..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><select aria-label="Lọc theo lĩnh vực" value={industry} onChange={(event) => setIndustry(event.target.value)}><option value="all">Tất cả lĩnh vực</option>{industries.map((item) => <option key={item} value={item}>{item}</option>)}</select><button type="button" className="refresh-button" onClick={refresh} disabled={loading}>↻ Làm mới</button></div>
+            <div className="jobs-toolbar"><label className="search-wrap"><span aria-hidden="true">⌕</span><input type="search" aria-label="Tìm công việc" placeholder="Tìm theo tên việc, lĩnh vực, địa điểm..." value={query} onChange={(event) => setQuery(event.target.value)} /></label><button type="button" className="refresh-button" onClick={refresh} disabled={loading}>↻ Làm mới</button></div>
+            <div className="jobs-filters" role="group" aria-label="Bộ lọc">
+              <label className="filter-field"><span>Ngành nghề</span><select value={industry} onChange={(event) => setIndustry(event.target.value)}><option value="all">Tất cả ngành nghề</option>{industries.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+              <label className="filter-field"><span>Địa điểm</span><select value={location} onChange={(event) => setLocation(event.target.value)}><option value="all">Tất cả khu vực</option>{locations.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+              <label className="filter-field"><span>Mức lương tối thiểu (VNĐ)</span><input type="number" min="0" step="1000" inputMode="numeric" placeholder="Ví dụ: 30000" value={minSalary} onChange={(event) => setMinSalary(event.target.value)} /></label>
+              <button type="button" className="filter-clear" onClick={clearFilters} disabled={!filtersActive}>Xóa bộ lọc</button>
+            </div>
             {error && <p className="form-error dashboard-message" role="alert">{error}</p>}
             {notice && <p className="form-notice dashboard-message" role="status">{notice}</p>}
             <div className="result-header"><strong>{loading ? 'Đang tải...' : `${visible.length} kết quả`}</strong><span>{view === 'mine' ? 'Tất cả trạng thái' : 'Chỉ hiển thị việc đang tuyển'}</span></div>
             {loading ? <div className="jobs-empty"><div className="empty-icon">↻</div><h3>Đang tải việc làm...</h3><p>Đang lấy dữ liệu từ Spring Boot.</p></div> : visible.length === 0 ? (
-              <div className="jobs-empty"><div className="empty-icon">⌕</div><h3>{query || industry !== 'all' ? 'Không tìm thấy kết quả' : view === 'mine' ? 'Bạn chưa đăng tin nào' : 'Chưa có công việc đang tuyển'}</h3><p>{query || industry !== 'all' ? 'Hãy thử từ khóa hoặc bộ lọc khác.' : view === 'mine' ? 'Tạo tin tuyển dụng đầu tiên để bắt đầu.' : 'Tin thử nghiệm trước đó đã chuyển sang FILLED, nên không xuất hiện ở đây.'}</p>{employer && !(query || industry !== 'all') && <button type="button" className="primary-button empty-cta" onClick={startCreate}>+ Đăng tin tuyển dụng</button>}</div>
+              <div className="jobs-empty"><div className="empty-icon">⌕</div><h3>{filtersActive ? 'Không tìm thấy kết quả' : view === 'mine' ? 'Bạn chưa đăng tin nào' : 'Chưa có công việc đang tuyển'}</h3><p>{filtersActive ? 'Hãy thử từ khóa hoặc bộ lọc khác.' : view === 'mine' ? 'Tạo tin tuyển dụng đầu tiên để bắt đầu.' : 'Tin thử nghiệm trước đó đã chuyển sang FILLED, nên không xuất hiện ở đây.'}</p>{employer && !filtersActive && <button type="button" className="primary-button empty-cta" onClick={startCreate}>+ Đăng tin tuyển dụng</button>}</div>
             ) : <div className="job-grid">{visible.map((job) => <JobCard key={job.id} job={job} onOpen={setSelected} showActions={view === 'mine' && employer} onEdit={startEdit} onFill={fillJob} busy={saving} />)}</div>}
             </>)}
           </section>
