@@ -49,15 +49,24 @@ async function callApi(path, { method = 'GET', token, body, signal } = {}) {
   return response.json()
 }
 
-function JobCard({ job, onOpen, showActions, onEdit, onFill, busy }) {
+// Nhãn và màu theo trạng thái tin: OPEN → FILLED → COMPLETED (FR-09)
+const JOB_STATUS = {
+  OPEN: { label: 'Đang tuyển', className: 'status-open' },
+  FILLED: { label: 'Đã đủ người', className: 'status-filled' },
+  COMPLETED: { label: 'Hoàn thành', className: 'status-completed' },
+}
+
+function statusOf(job) {
+  return JOB_STATUS[job.jobStatus] || { label: job.jobStatus, className: 'status-filled' }
+}
+
+function JobCard({ job, onOpen, showActions, onEdit, onFill, onComplete, busy }) {
   const isOpen = job.jobStatus === 'OPEN'
   return (
     <article className="job-card">
       <div className="job-card-top">
         <div className="job-avatar" aria-hidden="true">{(job.industry || 'J').slice(0, 1).toUpperCase()}</div>
-        <span className={`status-pill ${isOpen ? 'status-open' : 'status-filled'}`}>
-          {isOpen ? 'Đang tuyển' : job.jobStatus === 'FILLED' ? 'Đã đủ người' : 'Hoàn thành'}
-        </span>
+        <span className={`status-pill ${statusOf(job).className}`}>{statusOf(job).label}</span>
       </div>
       <p className="job-industry">{job.industry}</p>
       <h3>{job.title}</h3>
@@ -77,6 +86,11 @@ function JobCard({ job, onOpen, showActions, onEdit, onFill, busy }) {
         <div className="job-owner-actions">
           <button type="button" className="text-button" disabled={busy} onClick={() => onEdit(job)}>Chỉnh sửa</button>
           <button type="button" className="text-button warn" disabled={busy} onClick={() => onFill(job)}>Đánh dấu đủ người</button>
+        </div>
+      )}
+      {showActions && job.jobStatus === 'FILLED' && (
+        <div className="job-owner-actions">
+          <button type="button" className="text-button complete" disabled={busy} onClick={() => onComplete(job)}>✓ Đánh dấu hoàn thành</button>
         </div>
       )}
     </article>
@@ -280,6 +294,25 @@ export default function JobMarketplace({ session, onLogout, onProfileSaved }) {
     }
   }
 
+  // FR-09: FILLED → COMPLETED (cần ít nhất 1 ứng viên đã được chấp nhận)
+  async function completeJob(job) {
+    if (!window.confirm(`Xác nhận công việc “${job.title}” đã hoàn thành? Sau khi hoàn thành, tin không thể chỉnh sửa.`)) return
+    setSaving(true)
+    setError('')
+    try {
+      await callApi(`/api/jobs/${job.id}/complete`, { method: 'PATCH', token: session.accessToken })
+      setSelected(null)
+      setNotice('Đã chuyển trạng thái tin tuyển dụng sang COMPLETED.')
+      refresh()
+    } catch (err) {
+      if (err instanceof TypeError) setError('Không thể kết nối Spring Boot.')
+      else if (err.message === friendlyError(409)) setError('Chỉ hoàn thành được tin đã đủ người (FILLED) và có ít nhất một ứng viên được chấp nhận.')
+      else setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const myOpen = mine.filter((j) => j.jobStatus === 'OPEN').length
 
   return (
@@ -323,7 +356,7 @@ export default function JobMarketplace({ session, onLogout, onProfileSaved }) {
             <div className="result-header"><strong>{loading ? 'Đang tải...' : `${visible.length} kết quả`}</strong><span>{view === 'mine' ? 'Tất cả trạng thái' : 'Chỉ hiển thị việc đang tuyển'}</span></div>
             {loading ? <div className="jobs-empty"><div className="empty-icon">↻</div><h3>Đang tải việc làm...</h3><p>Đang lấy dữ liệu từ Spring Boot.</p></div> : visible.length === 0 ? (
               <div className="jobs-empty"><div className="empty-icon">⌕</div><h3>{filtersActive ? 'Không tìm thấy kết quả' : view === 'mine' ? 'Bạn chưa đăng tin nào' : 'Chưa có công việc đang tuyển'}</h3><p>{filtersActive ? 'Hãy thử từ khóa hoặc bộ lọc khác.' : view === 'mine' ? 'Tạo tin tuyển dụng đầu tiên để bắt đầu.' : 'Tin thử nghiệm trước đó đã chuyển sang FILLED, nên không xuất hiện ở đây.'}</p>{employer && !filtersActive && <button type="button" className="primary-button empty-cta" onClick={startCreate}>+ Đăng tin tuyển dụng</button>}</div>
-            ) : <div className="job-grid">{visible.map((job) => <JobCard key={job.id} job={job} onOpen={setSelected} showActions={view === 'mine' && employer} onEdit={startEdit} onFill={fillJob} busy={saving} />)}</div>}
+            ) : <div className="job-grid">{visible.map((job) => <JobCard key={job.id} job={job} onOpen={setSelected} showActions={view === 'mine' && employer} onEdit={startEdit} onFill={fillJob} onComplete={completeJob} busy={saving} />)}</div>}
             </>)}
           </section>
           <aside className="dashboard-sidebar"><div className="side-card"><span className="side-icon">✦</span><h3>{employer ? 'Đăng tuyển nhanh' : 'Bắt đầu hành trình'}</h3><p>{employer ? 'Tạo tin tuyển dụng với đầy đủ mô tả, thời gian và mức thù lao.' : 'Tìm kiếm cơ hội việc làm mới, phù hợp với kỹ năng của bạn.'}</p>{employer ? <button className="side-link" type="button" onClick={startCreate}>Tạo tin ngay →</button> : <button className="side-link" type="button" onClick={() => switchView('explore')}>Khám phá việc làm →</button>}</div><div className="side-card side-card-white"><h3>Tài khoản của bạn</h3><dl><div><dt>Họ tên</dt><dd>{session.fullName}</dd></div><div><dt>Email</dt><dd>{session.email}</dd></div><div><dt>Vai trò</dt><dd>{session.role}</dd></div></dl>{hasProfile && view !== 'profile' && <button className="side-link" type="button" onClick={() => switchView('profile')}>Cập nhật hồ sơ →</button>}<p className="session-note">Phiên JWT hiện lưu trong bộ nhớ. Tải lại trang sẽ yêu cầu đăng nhập lại.</p></div></aside>
@@ -331,7 +364,7 @@ export default function JobMarketplace({ session, onLogout, onProfileSaved }) {
       </main>
       <footer className="dashboard-footer">© Student Freelance Marketplace · ReactJS + Spring Boot + MySQL</footer>
 
-      {selected && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null) }}><section role="dialog" aria-modal="true" aria-labelledby="job-detail-title" className="job-modal job-detail"><div className="modal-heading"><div><p className="section-kicker">CHI TIẾT CÔNG VIỆC</p><h2 id="job-detail-title">{selected.title}</h2></div><button type="button" className="close-button" aria-label="Đóng" onClick={() => setSelected(null)}>×</button></div><span className={`status-pill ${selected.jobStatus === 'OPEN' ? 'status-open' : 'status-filled'}`}>{selected.jobStatus}</span><div className="job-detail-info"><div><small>Lĩnh vực</small><strong>{selected.industry}</strong></div><div><small>Địa điểm</small><strong>{selected.location}</strong></div><div><small>Thù lao dự kiến</small><strong>{salaryLabel(selected)}</strong></div><div><small>Lịch làm việc</small><strong>{selected.workSchedule}</strong></div></div><h3>Mô tả công việc</h3><p className="detail-description">{selected.description}</p><div className="application-apply-actions">{!employer && session.role === 'STUDENT' && selected.jobStatus === 'OPEN' && <button type="button" className="primary-button" onClick={() => { setApplying(selected); setSelected(null) }}>Ứng tuyển ngay →</button>}<button type="button" className="outline-button" onClick={() => setSelected(null)}>Đóng chi tiết</button></div></section></div>}
+      {selected && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null) }}><section role="dialog" aria-modal="true" aria-labelledby="job-detail-title" className="job-modal job-detail"><div className="modal-heading"><div><p className="section-kicker">CHI TIẾT CÔNG VIỆC</p><h2 id="job-detail-title">{selected.title}</h2></div><button type="button" className="close-button" aria-label="Đóng" onClick={() => setSelected(null)}>×</button></div><span className={`status-pill ${statusOf(selected).className}`}>{statusOf(selected).label}</span><div className="job-detail-info"><div><small>Lĩnh vực</small><strong>{selected.industry}</strong></div><div><small>Địa điểm</small><strong>{selected.location}</strong></div><div><small>Thù lao dự kiến</small><strong>{salaryLabel(selected)}</strong></div><div><small>Lịch làm việc</small><strong>{selected.workSchedule}</strong></div></div><h3>Mô tả công việc</h3><p className="detail-description">{selected.description}</p><div className="application-apply-actions">{!employer && session.role === 'STUDENT' && selected.jobStatus === 'OPEN' && <button type="button" className="primary-button" onClick={() => { setApplying(selected); setSelected(null) }}>Ứng tuyển ngay →</button>}<button type="button" className="outline-button" onClick={() => setSelected(null)}>Đóng chi tiết</button></div></section></div>}
       {applying && <ApplyJobModal job={applying} token={session.accessToken} onCancel={() => setApplying(null)} onSuccess={() => { setApplying(null); setNotice('Đã gửi đơn ứng tuyển thành công.'); switchView('applications'); setNotice('Đã gửi đơn ứng tuyển thành công.'); }} />}
       {formOpen && editing && <JobForm key={editing.id || 'new'} initial={editing} saving={saving} serverError={error} onCancel={() => { setFormOpen(false); setEditing(null) }} onSave={saveJob} />}
     </div>

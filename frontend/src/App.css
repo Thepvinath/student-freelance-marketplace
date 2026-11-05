@@ -316,3 +316,7 @@ button.profile-initial:hover,button.profile-initial:focus-visible {box-shadow:0 
 .jobs-filters .filter-clear:disabled {opacity:.45;cursor:default}
 @media(max-width:980px){.jobs-filters{grid-template-columns:1fr 1fr}.filter-clear{width:100%}}
 @media(max-width:690px){.jobs-filters{grid-template-columns:1fr;padding:14px}}
+
+/* ===== F4 · FR-09 Trạng thái COMPLETED ===== */
+.status-completed {background:#e8f0ff;color:#1d4fb8}
+.job-owner-actions .text-button.complete {color:#168351}
