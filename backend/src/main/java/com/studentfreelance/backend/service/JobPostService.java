@@ -74,6 +74,7 @@ public class JobPostService {
             Long employerId) {
 
         validateSalary(request);
+        validateWorkTime(request);
 
         JobPost job = new JobPost();
         job.setEmployerId(employerId);
@@ -106,6 +107,7 @@ public class JobPostService {
         }
 
         validateSalary(request);
+        validateWorkTime(request);
         applyRequest(job, request);
 
         return JobPostResponse.from(
@@ -183,6 +185,24 @@ public class JobPostService {
         }
     }
 
+    // Sprint 4: giờ bắt đầu / kết thúc phải cùng có hoặc cùng trống,
+    // và giờ kết thúc phải sau giờ bắt đầu (chưa hỗ trợ ca qua nửa đêm).
+    private void validateWorkTime(JobPostRequest request) {
+        if ((request.startTime() == null) != (request.endTime() == null)) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "startTime and endTime must be provided together"
+            );
+        }
+        if (request.startTime() != null
+                && !request.endTime().isAfter(request.startTime())) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "endTime must be after startTime"
+            );
+        }
+    }
+
     private void applyRequest(
             JobPost job, JobPostRequest request) {
 
@@ -193,5 +213,7 @@ public class JobPostService {
         job.setSalaryMin(request.salaryMin());
         job.setSalaryMax(request.salaryMax());
         job.setWorkSchedule(request.workSchedule().trim());
+        job.setStartTime(request.startTime());
+        job.setEndTime(request.endTime());
     }
 }

@@ -3,6 +3,7 @@ package com.studentfreelance.backend.entity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Entity
 @Table(name = "job_posts")
@@ -38,6 +39,13 @@ public class JobPost {
     @Column(name = "work_schedule", nullable = false,
             length = 255)
     private String workSchedule;
+
+    // Khung giờ làm việc (Sprint 4). NULL = giờ linh hoạt.
+    @Column(name = "start_time")
+    private LocalTime startTime;
+
+    @Column(name = "end_time")
+    private LocalTime endTime;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "job_status", nullable = false)
@@ -115,6 +123,22 @@ public class JobPost {
 
     public void setWorkSchedule(String workSchedule) {
         this.workSchedule = workSchedule;
+    }
+
+    public LocalTime getStartTime() {
+        return startTime;
+    }
+
+    public void setStartTime(LocalTime startTime) {
+        this.startTime = startTime;
+    }
+
+    public LocalTime getEndTime() {
+        return endTime;
+    }
+
+    public void setEndTime(LocalTime endTime) {
+        this.endTime = endTime;
     }
 
     public JobStatus getJobStatus() {

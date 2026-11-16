@@ -2,6 +2,7 @@ package com.studentfreelance.backend.dto;
 
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
+import java.time.LocalTime;
 
 public record JobPostRequest(
 
@@ -32,6 +33,12 @@ public record JobPostRequest(
 
     @NotBlank
     @Size(max = 255)
-    String workSchedule
+    String workSchedule,
+
+    // Khung giờ làm việc, dạng "HH:mm" (ví dụ "17:00"). Không bắt buộc:
+    // bỏ trống cả hai = giờ linh hoạt.
+    LocalTime startTime,
+
+    LocalTime endTime
 
 ) {}
