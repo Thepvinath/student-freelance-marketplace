@@ -5,6 +5,7 @@ import com.studentfreelance.backend.entity.JobStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 public record JobPostResponse(
     Long id,
@@ -16,6 +17,8 @@ public record JobPostResponse(
     BigDecimal salaryMin,
     BigDecimal salaryMax,
     String workSchedule,
+    LocalTime startTime,
+    LocalTime endTime,
     JobStatus jobStatus,
     LocalDateTime createdAt
 ) {
@@ -30,6 +33,8 @@ public record JobPostResponse(
             job.getSalaryMin(),
             job.getSalaryMax(),
             job.getWorkSchedule(),
+            job.getStartTime(),
+            job.getEndTime(),
             job.getJobStatus(),
             job.getCreatedAt()
         );
