@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS `employer_profiles` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4. job_posts: Tin tuyển dụng – FR-05, FR-06, FR-09
+--    start_time / end_time: khung giờ làm việc để lọc theo giờ rảnh (NULL = giờ linh hoạt)
 CREATE TABLE IF NOT EXISTS `job_posts` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `employer_id` bigint NOT NULL,
@@ -65,6 +66,8 @@ CREATE TABLE IF NOT EXISTS `job_posts` (
   `salary_min` decimal(12,2) NOT NULL,
   `salary_max` decimal(12,2) NOT NULL,
   `work_schedule` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `start_time` time DEFAULT NULL,
+  `end_time` time DEFAULT NULL,
   `job_status` enum('OPEN','FILLED','COMPLETED') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'OPEN',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -72,7 +75,8 @@ CREATE TABLE IF NOT EXISTS `job_posts` (
   KEY `idx_job_posts_search` (`job_status`,`industry`,`location`),
   KEY `idx_job_posts_created_at` (`created_at`),
   CONSTRAINT `fk_job_posts_employer` FOREIGN KEY (`employer_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `chk_job_posts_salary` CHECK (((`salary_min` >= 0) and (`salary_max` >= `salary_min`)))
+  CONSTRAINT `chk_job_posts_salary` CHECK (((`salary_min` >= 0) and (`salary_max` >= `salary_min`))),
+  CONSTRAINT `chk_job_posts_work_time` CHECK (((`start_time` is null) and (`end_time` is null)) or ((`start_time` is not null) and (`end_time` is not null) and (`end_time` > `start_time`)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 5. applications: Đơn ứng tuyển, mỗi sinh viên ứng tuyển 1 tin 1 lần – FR-07, FR-08

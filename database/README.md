@@ -56,3 +56,24 @@ Mật khẩu chung: `Demo@2026` (chỉ dùng cho tài khoản demo, lưu dạng 
 Không tạo sẵn đơn ứng tuyển – ứng tuyển, duyệt / từ chối và hoàn thành công việc được thực hiện trực tiếp khi demo.
 
 File chỉ dùng `INSERT` có kiểm tra `NOT EXISTS`: an toàn khi chạy lại, không tạo trùng và không thay đổi dữ liệu đã có.
+
+## Sprint 4 – Khung giờ làm việc (`sprint4-job-work-time.sql`)
+
+Thêm 2 cột vào `job_posts` để sinh viên lọc việc theo giờ rảnh (ví dụ 17:00 – 19:00):
+
+| Cột | Kiểu | Ý nghĩa |
+|---|---|---|
+| `start_time` | `TIME`, cho phép `NULL` | Giờ bắt đầu ca làm |
+| `end_time` | `TIME`, cho phép `NULL` | Giờ kết thúc ca làm |
+
+Ràng buộc `chk_job_posts_work_time`: cả hai cùng `NULL` (giờ linh hoạt) hoặc cả hai có giá trị
+và `end_time > start_time`. Chưa hỗ trợ ca qua nửa đêm.
+
+Cách chạy (MySQL Workbench → `File → Open SQL Script…` → Execute ⚡):
+
+- CSDL đang dùng: chỉ chạy `sprint4-job-work-time.sql`
+- CSDL mới: `schema.sql` → `demo-data.sql` → `sprint4-job-work-time.sql`
+
+File chỉ thêm cột / ràng buộc khi chưa có, điền giờ cho 5 tin demo đang để trống giờ và thêm
+1 nhà tuyển dụng demo (`saoviet.demo@example.com`, mật khẩu `Demo@2026`) cùng 5 tin mới.
+Không `DROP`, không `DELETE`; chạy lại nhiều lần không tạo trùng.
