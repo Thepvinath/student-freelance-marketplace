@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ReviewList } from './Reviews.jsx'
 
 // WF-07 · FR-04 – Quản lý hồ sơ cá nhân
 // API: GET / PUT /api/profile/me (chỉ hồ sơ của tài khoản đang đăng nhập)
@@ -214,6 +215,8 @@ export default function ProfilePage({ session, onProfileSaved }) {
       ) : (
         <ProfileForm key={requestKey} profile={current.profile} token={session.accessToken} onSaved={onProfileSaved} />
       )}
+      {/* FR-10: đánh giá đã nhận */}
+      <ReviewList userId={session.userId} />
     </div>
   )
 }

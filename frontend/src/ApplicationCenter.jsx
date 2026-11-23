@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { RatingBadge, ReviewModal } from './Reviews.jsx'
 
 const STATUS_LABELS = {
   PENDING: 'Chờ xét duyệt',
@@ -134,6 +135,7 @@ export default function ApplicationCenter({ session, employer, jobs, notice }) {
   const [message, setMessage] = useState('')
   const [actingId, setActingId] = useState(null)
   const [reload, setReload] = useState(0)
+  const [reviewing, setReviewing] = useState(null)
 
   // Derive a valid selection without synchronously setting state in an Effect.
   // Jobs may arrive after this component first renders.
@@ -237,6 +239,7 @@ export default function ApplicationCenter({ session, employer, jobs, notice }) {
                   <p className="section-kicker">{employer ? 'ỨNG VIÊN' : 'CÔNG VIỆC ĐÃ ỨNG TUYỂN'}</p>
                   <h3>{employer ? app.studentName : app.jobTitle}</h3>
                   <p>{employer ? app.studentEmail : `Mã tin #${app.jobId}`}</p>
+                  {employer && <RatingBadge userId={app.studentId} empty="Sinh viên chưa có đánh giá" />}
                 </div>
                 <StatusTag value={app.status} />
               </div>
@@ -246,6 +249,14 @@ export default function ApplicationCenter({ session, employer, jobs, notice }) {
                 <span>Ngày ứng tuyển: {formatDate(app.appliedAt)}</span>
                 {cvLink(app.cvUrl) && <a href={cvLink(app.cvUrl)} target="_blank" rel="noopener noreferrer">Xem CV ↗</a>}
               </div>
+              {app.jobStatus === 'COMPLETED' && app.status === 'APPROVED' && (
+                <div className="application-actions review-actions">
+                  <span className="job-done-tag">Công việc đã hoàn thành</span>
+                  {app.reviewedByMe
+                    ? <span className="application-tag status-approved">Đã đánh giá</span>
+                    : <button type="button" className="cta-button small" onClick={() => setReviewing(app)}>{employer ? 'Đánh giá sinh viên' : 'Đánh giá nhà tuyển dụng'}</button>}
+                </div>
+              )}
               {employer && app.status === 'PENDING' && (
                 <div className="application-actions">
                   <button type="button" className="primary-button" disabled={actingId !== null} onClick={() => review(app.id, 'APPROVED')}>Chấp nhận</button>
@@ -255,6 +266,15 @@ export default function ApplicationCenter({ session, employer, jobs, notice }) {
             </article>
           ))}
         </div>
+      )}
+      {reviewing && (
+        <ReviewModal
+          application={reviewing}
+          token={session.accessToken}
+          targetLabel={employer ? `sinh viên ${reviewing.studentName}` : 'nhà tuyển dụng'}
+          onCancel={() => setReviewing(null)}
+          onDone={() => { setReviewing(null); setMessage('Đã gửi đánh giá. Cảm ơn bạn!'); setReload((n) => n + 1) }}
+        />
       )}
     </div>
   )
