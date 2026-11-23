@@ -439,3 +439,24 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 @media (max-width: 760px) {
   .day-board { display: none; }
 }
+
+/* ===== FR-11 · Chuông thông báo ===== */
+.bell-wrap { position: relative; }
+.bell-button { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 10px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
+.bell-button:hover, .bell-button.open { background: rgba(255,255,255,.16); }
+.bell-count { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; display: grid; place-items: center; border-radius: 99px; background: var(--coral); color: #fff; font-size: 11px; font-weight: 800; box-shadow: 0 0 0 2px var(--navy); }
+.bell-panel { position: absolute; right: 0; top: calc(100% + 10px); z-index: 70; width: min(380px, calc(100vw - 24px)); max-height: 460px; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: #fff; color: var(--ink); box-shadow: 0 24px 60px rgba(6,14,48,.3); }
+.bell-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.bell-head strong { font-size: 15px; }
+.bell-head .text-button { font-size: 12.5px; }
+.bell-list { margin: 0; padding: 6px; list-style: none; overflow-y: auto; }
+.bell-list button { display: flex; gap: 10px; width: 100%; padding: 10px; border: 0; border-radius: 10px; background: none; color: #4b5577; text-align: left; font-size: 13.5px; line-height: 1.45; cursor: pointer; }
+.bell-list button:hover { background: #f4f6fc; }
+.bell-list button.unread { color: var(--ink); font-weight: 600; background: #f1f4ff; }
+.bell-dot { width: 8px; height: 8px; margin-top: 6px; flex-shrink: 0; border-radius: 50%; background: transparent; }
+.bell-list .unread .bell-dot { background: var(--coral); }
+.bell-text { display: grid; gap: 3px; }
+.bell-text small { font-size: 12px; font-weight: 500; color: var(--muted); }
+.bell-empty { margin: 0; padding: 22px 18px; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+.bell-error { margin: 10px; }
+@media (max-width: 760px) { .bell-panel { position: fixed; top: 64px; right: 12px; } }
