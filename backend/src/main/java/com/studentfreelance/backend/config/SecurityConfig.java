@@ -91,6 +91,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/profile/me")
                     .hasAnyRole("STUDENT", "EMPLOYER")
 
+                // FR-11: thông báo của chính tài khoản đang đăng nhập
+                .requestMatchers(HttpMethod.GET, "/api/notifications", "/api/notifications/unread-count")
+                    .hasAnyRole("STUDENT", "EMPLOYER", "ADMIN")
+                .requestMatchers(HttpMethod.PATCH, "/api/notifications/*/read", "/api/notifications/read-all")
+                    .hasAnyRole("STUDENT", "EMPLOYER", "ADMIN")
+
                 .anyRequest().denyAll()
             )
             .addFilterBefore(
