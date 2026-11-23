@@ -3,6 +3,7 @@ import ApplicationCenter, { ApplyJobModal } from './ApplicationCenter.jsx'
 import ProfilePage from './ProfilePage.jsx'
 import Icon from './Icon.jsx'
 import NotificationBell from './NotificationBell.jsx'
+import { RatingBadge } from './Reviews.jsx'
 import { DayBar, TimeRangeField } from './TimeRange.jsx'
 import {
   SHIFTS, areaOf, fitsWindow, hasWorkTime, hhmm, industryLook, periodOf,
@@ -715,6 +716,7 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
               <div><small>Thù lao</small><strong className="money">{salaryLabel(selected)}</strong></div>
               <div><small>Khung giờ</small><strong>{workTimeLabel(selected)}</strong><DayBar from={selected.startTime} to={selected.endTime} period={periodOf(selected)} /></div>
               <div className="span-2"><small>Ngày làm và ghi chú lịch</small><strong>{selected.workSchedule}</strong></div>
+              <div className="span-2"><small>Đánh giá nhà tuyển dụng</small><RatingBadge userId={selected.employerId} empty="Nhà tuyển dụng chưa có đánh giá" /></div>
             </div>
             <h3>Mô tả công việc</h3>
             <p className="detail-description">{selected.description}</p>
