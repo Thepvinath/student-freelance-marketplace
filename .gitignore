@@ -40,3 +40,6 @@ Thumbs.db
 
 # Local database configuration
 backend/src/main/resources/application-local.properties
+
+# Giao diện React được chép vào đây khi build (Dockerfile / thử trên máy) – không commit
+backend/src/main/resources/static/
