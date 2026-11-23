@@ -20,17 +20,20 @@ public class ApplicationService {
     private final UserRepository users;
     private final EntityManager entityManager;
     private final NotificationService notifications;
+    private final ReviewService reviews;
 
     public ApplicationService(ApplicationRepository applications,
                               JobPostRepository jobs,
                               UserRepository users,
                               EntityManager entityManager,
-                              NotificationService notifications) {
+                              NotificationService notifications,
+                              ReviewService reviews) {
         this.applications = applications;
         this.jobs = jobs;
         this.users = users;
         this.entityManager = entityManager;
         this.notifications = notifications;
+        this.reviews = reviews;
     }
 
     @Transactional
@@ -63,7 +66,7 @@ public class ApplicationService {
             // FR-11: báo cho nhà tuyển dụng có đơn mới
             notifications.notify(job.getEmployerId(), saved.getId(),
                 student.getFullName() + " đã ứng tuyển \u201C" + job.getTitle() + "\u201D.");
-            return toResponse(saved);
+            return toResponse(saved, false);
         } catch (DataIntegrityViolationException exception) {
             // Also enforce one application per student per job in MySQL.
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -73,15 +76,20 @@ public class ApplicationService {
 
     @Transactional(readOnly = true)
     public List<ApplicationResponse> myApplications(Long studentId) {
-        return applications.findByStudentIdOrderByAppliedAtDesc(studentId)
-            .stream().map(this::toResponse).toList();
+        return withReviewFlags(applications.findByStudentIdOrderByAppliedAtDesc(studentId), studentId);
     }
 
     @Transactional(readOnly = true)
     public List<ApplicationResponse> jobApplications(Long jobId, Long employerId) {
         requireOwnedJob(jobId, employerId);
-        return applications.findByJobIdOrderByAppliedAtDesc(jobId)
-            .stream().map(this::toResponse).toList();
+        return withReviewFlags(applications.findByJobIdOrderByAppliedAtDesc(jobId), employerId);
+    }
+
+    // FR-10: đánh dấu đơn nào người xem đã đánh giá
+    private List<ApplicationResponse> withReviewFlags(List<JobApplication> list, Long viewerId) {
+        var reviewed = reviews.reviewedApplicationIds(viewerId,
+            list.stream().map(JobApplication::getId).toList());
+        return list.stream().map(app -> toResponse(app, reviewed.contains(app.getId()))).toList();
     }
 
     @Transactional
@@ -107,7 +115,7 @@ public class ApplicationService {
             request.status() == ApplicationStatus.APPROVED
                 ? "Đơn ứng tuyển \u201C" + job.getTitle() + "\u201D đã được chấp nhận."
                 : "Đơn ứng tuyển \u201C" + job.getTitle() + "\u201D chưa được chấp nhận.");
-        return toResponse(saved);
+        return toResponse(saved, false);
     }
 
     private JobPost requireOwnedJob(Long jobId, Long employerId) {
@@ -115,7 +123,7 @@ public class ApplicationService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
     }
 
-    private ApplicationResponse toResponse(JobApplication application) {
+    private ApplicationResponse toResponse(JobApplication application, boolean reviewedByMe) {
         JobPost job = jobs.findById(application.getJobId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
         User student = users.findById(application.getStudentId())
@@ -124,7 +132,8 @@ public class ApplicationService {
             application.getId(), job.getId(), job.getTitle(),
             student.getId(), student.getFullName(), student.getEmail(),
             application.getIntroduction(), application.getCvUrl(),
-            application.getStatus(), application.getAppliedAt()
+            application.getStatus(), application.getAppliedAt(),
+            job.getEmployerId(), job.getJobStatus(), reviewedByMe
         );
     }
 
