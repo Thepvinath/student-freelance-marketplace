@@ -19,15 +19,18 @@ public class ApplicationService {
     private final JobPostRepository jobs;
     private final UserRepository users;
     private final EntityManager entityManager;
+    private final NotificationService notifications;
 
     public ApplicationService(ApplicationRepository applications,
                               JobPostRepository jobs,
                               UserRepository users,
-                              EntityManager entityManager) {
+                              EntityManager entityManager,
+                              NotificationService notifications) {
         this.applications = applications;
         this.jobs = jobs;
         this.users = users;
         this.entityManager = entityManager;
+        this.notifications = notifications;
     }
 
     @Transactional
@@ -57,6 +60,9 @@ public class ApplicationService {
         try {
             JobApplication saved = applications.saveAndFlush(application);
             entityManager.refresh(saved); // get MySQL DEFAULT applied_at
+            // FR-11: báo cho nhà tuyển dụng có đơn mới
+            notifications.notify(job.getEmployerId(), saved.getId(),
+                student.getFullName() + " đã ứng tuyển \u201C" + job.getTitle() + "\u201D.");
             return toResponse(saved);
         } catch (DataIntegrityViolationException exception) {
             // Also enforce one application per student per job in MySQL.
@@ -84,7 +90,7 @@ public class ApplicationService {
                                             UpdateApplicationStatusRequest request) {
         JobApplication application = applications.findById(applicationId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
-        requireOwnedJob(application.getJobId(), employerId);
+        JobPost job = requireOwnedJob(application.getJobId(), employerId);
 
         if (request.status() == ApplicationStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -95,7 +101,13 @@ public class ApplicationService {
                 "Application was already reviewed");
         }
         application.setStatus(request.status());
-        return toResponse(applications.saveAndFlush(application));
+        JobApplication saved = applications.saveAndFlush(application);
+        // FR-11: báo kết quả cho sinh viên
+        notifications.notify(saved.getStudentId(), saved.getId(),
+            request.status() == ApplicationStatus.APPROVED
+                ? "Đơn ứng tuyển \u201C" + job.getTitle() + "\u201D đã được chấp nhận."
+                : "Đơn ứng tuyển \u201C" + job.getTitle() + "\u201D chưa được chấp nhận.");
+        return toResponse(saved);
     }
 
     private JobPost requireOwnedJob(Long jobId, Long employerId) {

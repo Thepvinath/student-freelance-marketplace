@@ -20,14 +20,17 @@ public class JobPostService {
     private final JobPostRepository repository;
     private final ApplicationRepository applications;
     private final EntityManager entityManager;
+    private final NotificationService notifications;
 
     public JobPostService(
             JobPostRepository repository,
             ApplicationRepository applications,
-            EntityManager entityManager) {
+            EntityManager entityManager,
+            NotificationService notifications) {
         this.repository = repository;
         this.applications = applications;
         this.entityManager = entityManager;
+        this.notifications = notifications;
     }
 
     // Public: list only OPEN jobs
@@ -131,6 +134,13 @@ public class JobPostService {
 
         job.setJobStatus(JobStatus.FILLED);
 
+        // FR-11: báo cho sinh viên còn chờ xét duyệt rằng tin đã đủ người
+        for (JobApplication pending : applications.findByJobIdAndStatus(
+                id, ApplicationStatus.PENDING)) {
+            notifications.notify(pending.getStudentId(), pending.getId(),
+                "Tin \u201C" + job.getTitle() + "\u201D đã đủ người.");
+        }
+
         return JobPostResponse.from(
             repository.saveAndFlush(job)
         );
@@ -161,6 +171,13 @@ public class JobPostService {
         }
 
         job.setJobStatus(JobStatus.COMPLETED);
+
+        // FR-11: báo cho sinh viên đã được nhận rằng công việc hoàn thành
+        for (JobApplication approved : applications.findByJobIdAndStatus(
+                id, ApplicationStatus.APPROVED)) {
+            notifications.notify(approved.getStudentId(), approved.getId(),
+                "Công việc \u201C" + job.getTitle() + "\u201D đã hoàn thành. Bạn có thể đánh giá nhà tuyển dụng.");
+        }
 
         return JobPostResponse.from(
             repository.saveAndFlush(job)
