@@ -91,6 +91,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/profile/me")
                     .hasAnyRole("STUDENT", "EMPLOYER")
 
+                // FR-10: đánh giá (người viết được kiểm tra trong ReviewService)
+                .requestMatchers(HttpMethod.POST, "/api/applications/*/reviews")
+                    .hasAnyRole("STUDENT", "EMPLOYER")
+                .requestMatchers(HttpMethod.GET, "/api/users/*/reviews")
+                    .permitAll()
+
                 // FR-11: thông báo của chính tài khoản đang đăng nhập
                 .requestMatchers(HttpMethod.GET, "/api/notifications", "/api/notifications/unread-count")
                     .hasAnyRole("STUDENT", "EMPLOYER", "ADMIN")
