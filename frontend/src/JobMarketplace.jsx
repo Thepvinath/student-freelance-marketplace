@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import ApplicationCenter, { ApplyJobModal } from './ApplicationCenter.jsx'
 import ProfilePage from './ProfilePage.jsx'
 import Icon from './Icon.jsx'
+import NotificationBell from './NotificationBell.jsx'
 import { DayBar, TimeRangeField } from './TimeRange.jsx'
 import {
   SHIFTS, areaOf, fitsWindow, hasWorkTime, hhmm, industryLook, periodOf,
@@ -458,6 +459,7 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
             {signedIn ? (
               <>
                 {employer && <button type="button" className="cta-button small" onClick={postJob}><Icon name="plus" size={16} />Đăng tin</button>}
+                <NotificationBell token={session.accessToken} onOpenItem={() => go(employer ? 'candidates' : 'applications')} />
                 <button type="button" className="account-chip" onClick={() => (employer || student) && go('profile')} title={session.email}>
                   <span className="avatar">{session.fullName?.slice(0, 1).toUpperCase() || '?'}</span>
                   <span className="account-text">{session.fullName}<small>{employer ? 'Nhà tuyển dụng' : student ? 'Sinh viên' : 'Quản trị viên'}</small></span>
