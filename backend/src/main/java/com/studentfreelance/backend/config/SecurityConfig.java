@@ -103,6 +103,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PATCH, "/api/notifications/*/read", "/api/notifications/read-all")
                     .hasAnyRole("STUDENT", "EMPLOYER", "ADMIN")
 
+                // Sprint 5 – triển khai: Spring Boot phục vụ giao diện React đã build
+                // (index.html, JS/CSS/font trong /assets) để web và API dùng chung một địa chỉ.
+                .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.svg", "/icons.svg", "/assets/**")
+                    .permitAll()
+
                 .anyRequest().denyAll()
             )
             .addFilterBefore(
