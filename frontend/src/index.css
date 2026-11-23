@@ -1,35 +1,37 @@
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 88px;
 }
 
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #f3f7ff;
-  color: #14213d;
+  font-family: 'Be Vietnam Pro', 'Segoe UI', Arial, sans-serif;
+  background: #f3f5fb;
+  color: #17203d;
+  -webkit-font-smoothing: antialiased;
 }
 
-.page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
-.panel {
-  background: white;
-  border-radius: 16px;
-  padding: 40px;
-  width: 100%;
-  max-width: 580px;
-  box-shadow: 0 8px 30px #00000012;
-}
-
-h1 {
-  color: #0866e8;
-}
-
-h2 {
-  margin-top: 32px;
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
 }
