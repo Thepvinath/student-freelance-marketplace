@@ -6,14 +6,78 @@ export function money(value) {
   return `${currency.format(Number(value))} ₫`
 }
 
-export function salaryLabel(job) {
-  return `${currency.format(Number(job.salaryMin))} – ${currency.format(Number(job.salaryMax))} ₫`
+// Sprint 5: đơn vị thù lao – thẻ việc ghi rõ "25.000 – 28.000 ₫/giờ"
+export const SALARY_UNITS = {
+  HOUR: { label: 'Theo giờ', suffix: '/giờ', example: ['25000', '30000'] },
+  SHIFT: { label: 'Theo buổi', suffix: '/buổi', example: ['150000', '200000'] },
+  MONTH: { label: 'Theo tháng', suffix: '/tháng', example: ['7000000', '9000000'] },
 }
 
-// Khu vực = phần cuối của địa điểm, ví dụ "Quận 7, TP. Hồ Chí Minh" -> "TP. Hồ Chí Minh".
+export function salaryLabel(job) {
+  const suffix = SALARY_UNITS[job.salaryUnit]?.suffix || ''
+  return `${currency.format(Number(job.salaryMin))} – ${currency.format(Number(job.salaryMax))} ₫${suffix}`
+}
+
+// ---------- Khu vực: 34 tỉnh, thành phố (sau sắp xếp đơn vị hành chính 2025) ----------
+export const CITIES = ['Hà Nội', 'TP. Hồ Chí Minh', 'Hải Phòng', 'Đà Nẵng', 'Cần Thơ', 'Huế']
+export const PROVINCES = [
+  'An Giang', 'Bắc Ninh', 'Cà Mau', 'Cao Bằng', 'Đắk Lắk', 'Điện Biên', 'Đồng Nai',
+  'Đồng Tháp', 'Gia Lai', 'Hà Tĩnh', 'Hưng Yên', 'Khánh Hòa', 'Lai Châu', 'Lâm Đồng',
+  'Lạng Sơn', 'Lào Cai', 'Nghệ An', 'Ninh Bình', 'Phú Thọ', 'Quảng Ngãi', 'Quảng Ninh',
+  'Quảng Trị', 'Sơn La', 'Tây Ninh', 'Thái Nguyên', 'Thanh Hóa', 'Tuyên Quang', 'Vĩnh Long',
+]
+export const ALL_AREAS = [...CITIES, ...PROVINCES]
+
+// Tên tỉnh cũ (trước 2025) → tỉnh, thành phố mới, để tin cũ ghi "Bình Dương" vẫn lọc đúng.
+const OLD_AREAS = {
+  'hà giang': 'Tuyên Quang', 'yên bái': 'Lào Cai', 'bắc kạn': 'Thái Nguyên',
+  'vĩnh phúc': 'Phú Thọ', 'hòa bình': 'Phú Thọ', 'bắc giang': 'Bắc Ninh', 'thái bình': 'Hưng Yên',
+  'hải dương': 'Hải Phòng', 'hà nam': 'Ninh Bình', 'nam định': 'Ninh Bình', 'quảng bình': 'Quảng Trị',
+  'thừa thiên huế': 'Huế', 'quảng nam': 'Đà Nẵng', 'kon tum': 'Quảng Ngãi', 'bình định': 'Gia Lai',
+  'ninh thuận': 'Khánh Hòa', 'đắk nông': 'Lâm Đồng', 'bình thuận': 'Lâm Đồng', 'phú yên': 'Đắk Lắk',
+  'bình dương': 'TP. Hồ Chí Minh', 'bà rịa - vũng tàu': 'TP. Hồ Chí Minh', 'bà rịa – vũng tàu': 'TP. Hồ Chí Minh',
+  'bà rịa vũng tàu': 'TP. Hồ Chí Minh', 'sài gòn': 'TP. Hồ Chí Minh', 'hcm': 'TP. Hồ Chí Minh',
+  'bình phước': 'Đồng Nai', 'long an': 'Tây Ninh', 'sóc trăng': 'Cần Thơ', 'hậu giang': 'Cần Thơ',
+  'bến tre': 'Vĩnh Long', 'trà vinh': 'Vĩnh Long', 'tiền giang': 'Đồng Tháp', 'bạc liêu': 'Cà Mau',
+  'kiên giang': 'An Giang',
+}
+
+// "TP. Hồ Chí Minh", "Thành phố Hồ Chí Minh", "tỉnh Đồng Nai" → khóa so sánh "hồ chí minh", "đồng nai"
+function areaKey(name) {
+  return String(name || '').normalize('NFC').toLocaleLowerCase('vi-VN')
+    .replace(/^(thành phố|tp\.?|tỉnh)\s*/, '').replace(/\s+/g, ' ').trim()
+}
+const AREA_BY_KEY = new Map(ALL_AREAS.map((name) => [areaKey(name), name]))
+
+// Phần cuối của địa điểm → tên tỉnh, thành phố chuẩn (hoặc '' nếu không nhận ra).
+export function provinceOf(location) {
+  const parts = String(location || '').split(',').map((part) => part.trim()).filter(Boolean)
+  const key = areaKey(parts[parts.length - 1])
+  return AREA_BY_KEY.get(key) || OLD_AREAS[key] || ''
+}
+
+// Khu vực hiển thị = tỉnh, thành phố chuẩn; nếu không nhận ra thì giữ nguyên phần cuối địa điểm.
 export function areaOf(location) {
   const parts = String(location || '').split(',').map((part) => part.trim()).filter(Boolean)
-  return parts[parts.length - 1] || ''
+  return provinceOf(location) || parts[parts.length - 1] || ''
+}
+
+// Form đăng tin: tách "Phường Sài Gòn, TP. Hồ Chí Minh" → { detail: 'Phường Sài Gòn', province: 'TP. Hồ Chí Minh' }
+export function splitLocation(location) {
+  const parts = String(location || '').split(',').map((part) => part.trim()).filter(Boolean)
+  const province = provinceOf(location)
+  if (!province) return { detail: parts.join(', '), province: '' }
+  return { detail: parts.slice(0, -1).join(', '), province }
+}
+
+// ---------- Loại hình công việc (Sprint 5) ----------
+export const EMPLOYMENT_TYPES = {
+  PART_TIME: { label: 'Bán thời gian', short: 'Part-time' },
+  FULL_TIME: { label: 'Toàn thời gian', short: 'Full-time' },
+}
+
+export function employmentTypeOf(job) {
+  return job?.employmentType === 'FULL_TIME' ? 'FULL_TIME' : 'PART_TIME'
 }
 
 // ---------- Khung giờ (Sprint 4) ----------

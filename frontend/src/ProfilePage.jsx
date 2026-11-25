@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ReviewList } from './Reviews.jsx'
+import { CvPicker } from './CvFile.jsx'
+import { isUploadedCv } from './cvApi.js'
 
 // WF-07 · FR-04 – Quản lý hồ sơ cá nhân
 // API: GET / PUT /api/profile/me (chỉ hồ sơ của tài khoản đang đăng nhập)
@@ -67,8 +69,8 @@ function validate(values, student) {
   if (!values.fullName.trim()) return 'Vui lòng nhập họ và tên.'
   const phone = (student ? values.phone : values.contactPhone).trim()
   if (phone && !PHONE_PATTERN.test(phone)) return 'Số điện thoại không hợp lệ (8–20 ký tự, chỉ gồm số và + ( ) - .).'
-  if (student && values.cvUrl.trim() && !isHttpUrl(values.cvUrl.trim())) {
-    return 'Liên kết CV phải bắt đầu bằng https:// hoặc http://.'
+  if (student && values.cvUrl.trim() && !isUploadedCv(values.cvUrl.trim()) && !isHttpUrl(values.cvUrl.trim())) {
+    return 'CV không hợp lệ. Hãy chọn lại file PDF.'
   }
   return ''
 }
@@ -80,6 +82,7 @@ function ProfileForm({ profile, token, onSaved }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [cvName, setCvName] = useState('')
 
   function update(event) {
     const { name, value } = event.target
@@ -147,7 +150,11 @@ function ProfileForm({ profile, token, onSaved }) {
               <div className="field"><label htmlFor="pf-school">Trường</label><input id="pf-school" name="school" value={values.school} onChange={update} maxLength={150} placeholder="ĐH Văn Lang" /></div>
               <div className="field"><label htmlFor="pf-major">Chuyên ngành</label><input id="pf-major" name="major" value={values.major} onChange={update} maxLength={150} placeholder="Công nghệ thông tin" /></div>
               <div className="field"><label htmlFor="pf-phone">Số điện thoại</label><input id="pf-phone" name="phone" type="tel" value={values.phone} onChange={update} maxLength={20} placeholder="09xx xxx xxx" /></div>
-              <div className="field"><label htmlFor="pf-cv">Liên kết CV</label><input id="pf-cv" name="cvUrl" type="url" value={values.cvUrl} onChange={update} maxLength={500} placeholder="https://example.com/my-cv.pdf" /><small>Tự động điền khi bạn ứng tuyển.</small></div>
+              <div className="field"><label htmlFor="pf-cv">CV (file PDF)</label>
+                <CvPicker id="pf-cv" value={values.cvUrl} token={token} fileName={cvName}
+                  hint={values.cvUrl === (saved.cvUrl || '') ? (values.cvUrl ? 'Tự động đính kèm khi bạn ứng tuyển.' : 'Chọn file CV để đính kèm sẵn khi ứng tuyển.') : 'Bấm “Lưu thay đổi” để lưu CV mới vào hồ sơ.'}
+                  onChange={(url, info) => { setValues((current) => ({ ...current, cvUrl: url })); setCvName(info?.fileName || ''); setNotice('') }} />
+              </div>
             </div>
             <div className="field"><label htmlFor="pf-intro">Kỹ năng / Giới thiệu</label><textarea id="pf-intro" name="introduction" value={values.introduction} onChange={update} maxLength={2000} rows={4} placeholder="React, Java, giao tiếp..." /></div>
           </>

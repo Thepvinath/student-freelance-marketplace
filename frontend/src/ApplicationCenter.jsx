@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { RatingBadge, ReviewModal } from './Reviews.jsx'
+import { CvPicker, CvViewLink } from './CvFile.jsx'
+import { externalCvLink, isUploadedCv } from './cvApi.js'
 
 const STATUS_LABELS = {
   PENDING: 'Chờ xét duyệt',
   APPROVED: 'Đã chấp nhận',
   REJECTED: 'Đã từ chối',
 }
+
+const JOB_LABELS = { OPEN: 'Đang tuyển', FILLED: 'Đã đủ người', COMPLETED: 'Hoàn thành' }
 
 const ERROR_LABELS = {
   400: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.',
@@ -40,24 +44,50 @@ function formatDate(value) {
   return value.replace('T', ' ').slice(0, 16)
 }
 
-function cvLink(value) {
-  try {
-    const url = new URL(value)
-    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null
-  } catch {
-    return null
-  }
+// Sprint 5: liên hệ sau khi đơn được chấp nhận – gọi điện, gửi email, nhắn Zalo
+function telLink(phone) {
+  const digits = String(phone || '').replace(/[^\d+]/g, '')
+  return digits ? `tel:${digits}` : null
 }
+
+// Zalo chỉ dùng số di động Việt Nam (10 số, bắt đầu 03/05/07/08/09)
+function zaloLink(phone) {
+  const digits = String(phone || '').replace(/\D/g, '')
+  return /^0[35789]\d{8}$/.test(digits) ? `https://zalo.me/${digits}` : null
+}
+
+function ContactCard({ title, name, phone, email, note }) {
+  return (
+    <section className="contact-card" aria-label={title}>
+      <div className="contact-head">
+        <strong>{title}</strong>
+        <small>{note}</small>
+      </div>
+      <dl className="contact-list">
+        {name && <div><dt>Tên</dt><dd>{name}</dd></div>}
+        <div><dt>Điện thoại</dt><dd>{phone || <span className="muted">Chưa cập nhật trong hồ sơ</span>}</dd></div>
+        <div><dt>Email</dt><dd>{email || <span className="muted">Không có</span>}</dd></div>
+      </dl>
+      <div className="contact-actions">
+        {telLink(phone) && <a className="contact-button call" href={telLink(phone)}>Gọi điện</a>}
+        {zaloLink(phone) && <a className="contact-button zalo" href={zaloLink(phone)} target="_blank" rel="noopener noreferrer">Nhắn Zalo</a>}
+        {email && <a className="contact-button mail" href={`mailto:${email}`}>Gửi email</a>}
+      </div>
+    </section>
+  )
+}
+
 
 export function ApplyJobModal({ job, token, onCancel, onSuccess }) {
   const [introduction, setIntroduction] = useState('')
   const [cvUrl, setCvUrl] = useState('')
   const [cvFromProfile, setCvFromProfile] = useState(false)
+  const [cvName, setCvName] = useState('')
   const cvTouched = useRef(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  // FR-04: điền sẵn liên kết CV từ hồ sơ sinh viên (nếu có), sinh viên vẫn sửa được.
+  // FR-04: đính kèm sẵn CV (file PDF hoặc liên kết cũ) từ hồ sơ sinh viên, sinh viên vẫn đổi được.
   useEffect(() => {
     const controller = new AbortController()
     applicationApi('/api/profile/me', { token, signal: controller.signal })
@@ -77,8 +107,8 @@ export function ApplyJobModal({ job, token, onCancel, onSuccess }) {
     event.preventDefault()
     setError('')
     const url = cvUrl.trim()
-    if (url && !cvLink(url)) {
-      setError('Vui lòng nhập đường dẫn CV bắt đầu bằng https:// hoặc http://.')
+    if (url && !isUploadedCv(url) && !externalCvLink(url)) {
+      setError('CV không hợp lệ. Hãy chọn lại file PDF.')
       return
     }
     setBusy(true)
@@ -113,9 +143,10 @@ export function ApplyJobModal({ job, token, onCancel, onSuccess }) {
             <textarea id="apply-introduction" rows={5} maxLength={2000} value={introduction} onChange={(event) => setIntroduction(event.target.value)} placeholder="Xin chào, em quan tâm đến vị trí này vì..." />
           </div>
           <div className="field">
-            <label htmlFor="apply-cv">Liên kết CV (không bắt buộc)</label>
-            <input id="apply-cv" type="url" maxLength={500} placeholder="https://example.com/my-cv.pdf" value={cvUrl} onChange={(event) => { cvTouched.current = true; setCvUrl(event.target.value); setCvFromProfile(false) }} />
-            <small>{cvFromProfile ? 'Đã điền sẵn từ hồ sơ của bạn. Bạn có thể sửa nếu cần.' : 'Chỉ lưu đường dẫn CV, chưa hỗ trợ tải tệp lên hệ thống.'}</small>
+            <label htmlFor="apply-cv">CV đính kèm (không bắt buộc)</label>
+            <CvPicker id="apply-cv" value={cvUrl} token={token} fileName={cvName}
+              hint={cvFromProfile ? 'Lấy từ hồ sơ của bạn. Có thể chọn file khác cho đơn này.' : 'Nhà tuyển dụng của tin này sẽ xem được CV.'}
+              onChange={(url, info) => { cvTouched.current = true; setCvUrl(url); setCvName(info?.fileName || ''); setCvFromProfile(false) }} />
           </div>
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="modal-actions">
@@ -215,7 +246,7 @@ export default function ApplicationCenter({ session, employer, jobs, notice }) {
           <span>Chọn tin tuyển dụng của bạn</span>
           <select value={selectedJobId} onChange={(event) => { setJobId(event.target.value); setMessage(''); setActionError('') }}>
             {jobs.length === 0 && <option value="">Chưa có tin tuyển dụng</option>}
-            {jobs.map((job) => <option key={job.id} value={job.id}>{job.title} ({job.jobStatus})</option>)}
+            {jobs.map((job) => <option key={job.id} value={job.id}>{job.title} ({JOB_LABELS[job.jobStatus] || job.jobStatus}{job.moderationStatus && job.moderationStatus !== 'APPROVED' ? `, ${job.moderationStatus === 'PENDING' ? 'chờ duyệt' : 'bị từ chối'}` : ''})</option>)}
           </select>
         </label>
       )}
@@ -247,8 +278,11 @@ export default function ApplicationCenter({ session, employer, jobs, notice }) {
               {app.introduction && <p className="application-introduction">{app.introduction}</p>}
               <div className="application-meta">
                 <span>Ngày ứng tuyển: {formatDate(app.appliedAt)}</span>
-                {cvLink(app.cvUrl) && <a href={cvLink(app.cvUrl)} target="_blank" rel="noopener noreferrer">Xem CV ↗</a>}
+                {app.cvUrl && <CvViewLink url={app.cvUrl} token={session.accessToken} />}
               </div>
+              {app.status === 'APPROVED' && (employer
+                ? <ContactCard title="Liên hệ sinh viên" note="Trao đổi lịch làm, địa điểm và giấy tờ cần mang theo." phone={app.studentPhone} email={app.studentEmail} />
+                : <ContactCard title="Liên hệ nhà tuyển dụng" note="Bạn đã được nhận. Liên hệ để hỏi lịch làm và ngày bắt đầu." name={app.employerName} phone={app.employerPhone} email={app.employerEmail} />)}
               {app.jobStatus === 'COMPLETED' && app.status === 'APPROVED' && (
                 <div className="application-actions review-actions">
                   <span className="job-done-tag">Công việc đã hoàn thành</span>

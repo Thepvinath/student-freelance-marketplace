@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import ApplicationCenter, { ApplyJobModal } from './ApplicationCenter.jsx'
 import ProfilePage from './ProfilePage.jsx'
+import AdminPanel from './AdminPanel.jsx'
+import { TypeBadge } from './JobBadges.jsx'
 import Icon from './Icon.jsx'
 import NotificationBell from './NotificationBell.jsx'
 import { RatingBadge } from './Reviews.jsx'
 import { DayBar, TimeRangeField } from './TimeRange.jsx'
 import {
-  SHIFTS, areaOf, fitsWindow, hasWorkTime, hhmm, industryLook, periodOf,
-  salaryLabel, toMinutes, workTimeLabel,
+  ALL_AREAS, CITIES, EMPLOYMENT_TYPES, PROVINCES, SALARY_UNITS, SHIFTS, areaOf, employmentTypeOf, fitsWindow,
+  hasWorkTime, hhmm, industryLook, periodOf, salaryLabel, splitLocation, toMinutes, workTimeLabel,
 } from './jobUtils.js'
 
 const EMPTY_JOB = {
@@ -15,6 +17,10 @@ const EMPTY_JOB = {
   description: '',
   industry: '',
   location: '',
+  province: '',
+  locationDetail: '',
+  employmentType: '',
+  salaryUnit: '',
   salaryMin: '',
   salaryMax: '',
   workSchedule: '',
@@ -57,6 +63,24 @@ function statusOf(job) {
   return JOB_STATUS[job.jobStatus] || { label: job.jobStatus, className: 'status-filled' }
 }
 
+// FR-12: trạng thái duyệt tin (nhà tuyển dụng thấy ở "Tin của tôi")
+const MODERATION = {
+  PENDING: { label: 'Chờ duyệt', className: 'mod-pending' },
+  APPROVED: { label: 'Đã duyệt', className: 'mod-approved' },
+  REJECTED: { label: 'Bị từ chối', className: 'mod-rejected' },
+}
+
+// Khu vực: 6 thành phố trực thuộc trung ương + 28 tỉnh; kèm số việc đang tuyển
+function AreaOptions({ counts }) {
+  const label = (name) => (counts.get(name) ? `${name} (${counts.get(name)})` : name)
+  return (
+    <>
+      <optgroup label="Thành phố trực thuộc trung ương">{CITIES.map((name) => <option key={name} value={name}>{label(name)}</option>)}</optgroup>
+      <optgroup label="Tỉnh">{PROVINCES.map((name) => <option key={name} value={name}>{label(name)}</option>)}</optgroup>
+    </>
+  )
+}
+
 function scrollToId(id) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -80,9 +104,15 @@ function JobCard({ job, onOpen, onApply, showActions, onEdit, onFill, onComplete
       <div className="job-main">
         <div className="job-title-row">
           <h3><button type="button" className="job-title-link" onClick={() => onOpen(job)}>{job.title}</button></h3>
-          {showActions && <span className={`status-pill ${statusOf(job).className}`}>{statusOf(job).label}</span>}
+          <TypeBadge job={job} />
+          {/* Tin của tôi: tin đã duyệt hiện trạng thái tuyển; tin chưa duyệt / bị từ chối hiện trạng thái duyệt */}
+          {showActions && (job.moderationStatus === 'PENDING' || job.moderationStatus === 'REJECTED')
+            ? <span className={`mod-pill ${MODERATION[job.moderationStatus].className}`}>{MODERATION[job.moderationStatus].label}</span>
+            : showActions && <span className={`status-pill ${statusOf(job).className}`}>{statusOf(job).label}</span>}
           {!showActions && isNew(job) && <span className="new-pill">Mới</span>}
         </div>
+        {showActions && job.moderationStatus === 'PENDING' && <p className="mod-note pending">Tin đang chờ Quản trị viên duyệt, sinh viên chưa nhìn thấy tin này.</p>}
+        {showActions && job.moderationStatus === 'REJECTED' && <p className="mod-note rejected"><strong>Lý do từ chối:</strong> {job.moderationNote || 'Không ghi lý do.'} Sửa tin rồi lưu để gửi duyệt lại.</p>}
         <p className="job-meta">
           <span className="industry-tag">{job.industry}</span>
           <span><Icon name="pin" size={15} />{job.location}</span>
@@ -91,8 +121,8 @@ function JobCard({ job, onOpen, onApply, showActions, onEdit, onFill, onComplete
         <p className="job-schedule"><Icon name="clock" size={14} />{job.workSchedule}</p>
         {showActions && isOpen && (
           <div className="job-owner-actions">
-            <button type="button" className="text-button" disabled={busy} onClick={() => onEdit(job)}>Chỉnh sửa</button>
-            <button type="button" className="text-button warn" disabled={busy} onClick={() => onFill(job)}>Đánh dấu đủ người</button>
+            <button type="button" className="text-button" disabled={busy} onClick={() => onEdit(job)}>{job.moderationStatus === 'REJECTED' ? 'Sửa và gửi duyệt lại' : 'Chỉnh sửa'}</button>
+            {job.moderationStatus === 'APPROVED' && <button type="button" className="text-button warn" disabled={busy} onClick={() => onFill(job)}>Đánh dấu đủ người</button>}
           </div>
         )}
         {showActions && job.jobStatus === 'FILLED' && (
@@ -123,11 +153,24 @@ function JobForm({ initial, saving, serverError, onCancel, onSave }) {
 
   function update(event) {
     const { name, value } = event.target
-    setValues((current) => ({ ...current, [name]: value }))
+    setValues((current) => {
+      const next = { ...current, [name]: value }
+      // Chọn loại hình mà chưa chọn đơn vị thù lao → gợi ý /tháng cho toàn thời gian, /giờ cho bán thời gian
+      if (name === 'employmentType' && !current.salaryUnit) next.salaryUnit = value === 'FULL_TIME' ? 'MONTH' : 'HOUR'
+      return next
+    })
   }
 
   function submit(event) {
     event.preventDefault()
+    if (!values.employmentType) {
+      setError('Chọn loại hình công việc: Bán thời gian hoặc Toàn thời gian.')
+      return
+    }
+    if (!values.province) {
+      setError('Chọn tỉnh, thành phố nơi làm việc.')
+      return
+    }
     const salaryMin = Number(values.salaryMin)
     const salaryMax = Number(values.salaryMax)
     if (!Number.isFinite(salaryMin) || !Number.isFinite(salaryMax) || salaryMin < 0 || salaryMin > salaryMax) {
@@ -149,7 +192,9 @@ function JobForm({ initial, saving, serverError, onCancel, onSave }) {
       title: values.title.trim(),
       description: values.description.trim(),
       industry: values.industry.trim(),
-      location: values.location.trim(),
+      location: values.locationDetail.trim() ? `${values.locationDetail.trim()}, ${values.province}` : values.province,
+      employmentType: values.employmentType,
+      salaryUnit: values.salaryUnit,
       workSchedule: values.workSchedule.trim(),
       salaryMin,
       salaryMax,
@@ -170,12 +215,36 @@ function JobForm({ initial, saving, serverError, onCancel, onSave }) {
         <form onSubmit={submit} className="job-edit-form">
           <div className="field"><label htmlFor="job-title">Tên công việc</label><input id="job-title" name="title" value={values.title} onChange={update} maxLength={200} required placeholder="Ví dụ: Phục vụ quán cà phê ca chiều" /></div>
           <div className="field"><label htmlFor="job-desc">Mô tả công việc</label><textarea id="job-desc" name="description" value={values.description} onChange={update} required rows={4} placeholder="Nhiệm vụ, yêu cầu, quyền lợi..." /></div>
+          <fieldset className="type-picker">
+            <legend>Loại hình công việc <span className="required-mark">*</span></legend>
+            {Object.entries(EMPLOYMENT_TYPES).map(([key, item]) => (
+              <label key={key} className={`type-option type-${key === 'FULL_TIME' ? 'full' : 'part'} ${values.employmentType === key ? 'checked' : ''}`}>
+                <input type="radio" name="employmentType" value={key} checked={values.employmentType === key} onChange={update} required />
+                <strong>{item.label}</strong>
+                <small>{key === 'FULL_TIME' ? 'Làm cả ngày, ví dụ 08:00 – 17:00, thứ Hai – thứ Sáu' : 'Làm theo ca, vài giờ mỗi ngày'}</small>
+              </label>
+            ))}
+          </fieldset>
           <div className="form-two-cols">
+            <div className="field"><label htmlFor="job-province">Tỉnh, thành phố</label>
+              <select id="job-province" name="province" value={values.province} onChange={update} required>
+                <option value="">Chọn tỉnh, thành phố</option>
+                <AreaOptions counts={new Map()} />
+              </select>
+            </div>
+            <div className="field"><label htmlFor="job-location">Địa chỉ cụ thể</label><input id="job-location" name="locationDetail" value={values.locationDetail} onChange={update} maxLength={150} placeholder="Phường Sài Gòn, 12 Lê Lợi" /></div>
             <div className="field"><label htmlFor="job-industry">Ngành nghề</label><input id="job-industry" name="industry" value={values.industry} onChange={update} maxLength={100} required placeholder="Dịch vụ ăn uống" /></div>
-            <div className="field"><label htmlFor="job-location">Địa điểm</label><input id="job-location" name="location" value={values.location} onChange={update} maxLength={200} required placeholder="Quận 3, TP. Hồ Chí Minh" /></div>
-            <div className="field"><label htmlFor="job-min">Thù lao tối thiểu (VNĐ)</label><input id="job-min" name="salaryMin" type="number" min="0" max="9999999999.99" step="0.01" value={values.salaryMin} onChange={update} required placeholder="25000" /></div>
-            <div className="field"><label htmlFor="job-max">Thù lao tối đa (VNĐ)</label><input id="job-max" name="salaryMax" type="number" min="0" max="9999999999.99" step="0.01" value={values.salaryMax} onChange={update} required placeholder="30000" /></div>
+            <div className="field"><label htmlFor="job-unit">Tính thù lao</label>
+              <select id="job-unit" name="salaryUnit" value={values.salaryUnit} onChange={update} required>
+                <option value="">Chọn: theo giờ, buổi hoặc tháng</option>
+                {Object.entries(SALARY_UNITS).map(([key, unit]) => <option key={key} value={key}>{unit.label} ({unit.suffix})</option>)}
+              </select>
+            </div>
+            <div className="field"><label htmlFor="job-min">Thù lao tối thiểu (VNĐ{SALARY_UNITS[values.salaryUnit]?.suffix || ''})</label><input id="job-min" name="salaryMin" type="number" min="0" max="9999999999.99" step="0.01" value={values.salaryMin} onChange={update} required placeholder={(SALARY_UNITS[values.salaryUnit] || SALARY_UNITS.HOUR).example[0]} /></div>
+            <div className="field"><label htmlFor="job-max">Thù lao tối đa (VNĐ{SALARY_UNITS[values.salaryUnit]?.suffix || ''})</label><input id="job-max" name="salaryMax" type="number" min="0" max="9999999999.99" step="0.01" value={values.salaryMax} onChange={update} required placeholder={(SALARY_UNITS[values.salaryUnit] || SALARY_UNITS.HOUR).example[1]} /></div>
           </div>
+          {!initial.id && <p className="form-hint">Tin mới được Quản trị viên duyệt trước khi hiển thị cho sinh viên.</p>}
+          {initial.id && initial.moderationStatus === 'APPROVED' && <p className="form-hint">Sau khi lưu, tin sẽ tạm ẩn và chờ Quản trị viên duyệt lại.</p>}
           <div className="field">
             <span className="field-label" id="job-time-label">Khung giờ làm việc</span>
             <div className="time-field-row">
@@ -188,7 +257,7 @@ function JobForm({ initial, saving, serverError, onCancel, onSave }) {
           {(error || serverError) && <p className="form-error" role="alert">{error || serverError}</p>}
           <div className="modal-actions">
             <button type="button" className="outline-button" onClick={onCancel} disabled={saving}>Hủy</button>
-            <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Đang lưu...' : initial.id ? 'Lưu thay đổi' : 'Đăng tin'}</button>
+            <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Đang gửi...' : initial.id ? 'Lưu và gửi duyệt' : 'Gửi tin để duyệt'}</button>
           </div>
         </form>
       </section>
@@ -200,13 +269,16 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
   const signedIn = Boolean(session)
   const employer = session?.role === 'EMPLOYER'
   const student = session?.role === 'STUDENT'
-  const [view, setView] = useState('home')
+  const admin = session?.role === 'ADMIN'
+  const [view, setView] = useState(admin ? 'admin' : 'home')
   const [allJobs, setAllJobs] = useState([])
   const [mine, setMine] = useState([])
   const [query, setQuery] = useState('')
   const [industry, setIndustry] = useState('all')
   const [location, setLocation] = useState('all')
+  const [jobType, setJobType] = useState('all')
   const [minSalary, setMinSalary] = useState('')
+  const [salaryUnit, setSalaryUnit] = useState('HOUR')
   const [window_, setWindow] = useState({ from: '', to: '' })
   const [includeFlexible, setIncludeFlexible] = useState(true)
   const [selected, setSelected] = useState(null)
@@ -245,7 +317,8 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
     allJobs.forEach((job) => counts.set(job.industry, (counts.get(job.industry) || 0) + 1))
     return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'vi'))
   }, [allJobs])
-  const locations = useMemo(() => [...new Set(list.map((j) => areaOf(j.location)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [list])
+  // Khu vực ngoài danh sách 34 tỉnh, thành (ví dụ dữ liệu cũ ghi sai) vẫn lọc được
+  const otherAreas = useMemo(() => [...new Set(list.map((j) => areaOf(j.location)).filter((a) => a && !ALL_AREAS.includes(a)))], [list])
 
   // FR-06: từ khóa, ngành nghề, khu vực, mức lương tối thiểu + Sprint 4: khung giờ rảnh.
   const salaryFloor = Number(minSalary)
@@ -255,11 +328,13 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
     return haystack.includes(query.toLocaleLowerCase('vi-VN').trim())
       && (industry === 'all' || job.industry === industry)
       && (location === 'all' || areaOf(job.location) === location)
-      && (!(salaryFloor > 0) || Number(job.salaryMax) >= salaryFloor)
+      && (jobType === 'all' || employmentTypeOf(job) === jobType)
+      // Thù lao tối thiểu chỉ so sánh các tin cùng đơn vị (giờ với giờ, tháng với tháng)
+      && (!(salaryFloor > 0) || ((job.salaryUnit || 'HOUR') === salaryUnit && Number(job.salaryMax) >= salaryFloor))
       && (!windowValid || fitsWindow(job, window_.from, window_.to, includeFlexible))
-  }), [list, query, industry, location, salaryFloor, window_, includeFlexible, windowValid])
-  const filtersActive = Boolean(query.trim()) || industry !== 'all' || location !== 'all' || salaryFloor > 0 || Boolean(window_.from)
-  const inWindowCount = allJobs.filter((job) => hasWorkTime(job) && fitsWindow(job, window_.from, window_.to, false)).length
+  }), [list, query, industry, location, jobType, salaryFloor, salaryUnit, window_, includeFlexible, windowValid])
+  const filtersActive = Boolean(query.trim()) || industry !== 'all' || location !== 'all' || jobType !== 'all' || salaryFloor > 0 || Boolean(window_.from)
+  const typeCounts = { PART_TIME: allJobs.filter((job) => employmentTypeOf(job) === 'PART_TIME').length, FULL_TIME: allJobs.filter((job) => employmentTypeOf(job) === 'FULL_TIME').length }
   const shiftCounts = SHIFTS.map((shift) => ({ ...shift, count: allJobs.filter((job) => hasWorkTime(job) && fitsWindow(job, shift.from, shift.to, false)).length }))
   const flexibleCount = allJobs.filter((job) => !hasWorkTime(job)).length
   const employerCount = new Set(allJobs.map((job) => job.employerId)).size
@@ -268,7 +343,9 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
     allJobs.forEach((job) => { const a = areaOf(job.location); if (a) counts.set(a, (counts.get(a) || 0) + 1) })
     return [...counts.entries()].sort((a, b) => b[1] - a[1])
   }, [allJobs])
-  const topPaid = useMemo(() => [...allJobs].sort((a, b) => Number(b.salaryMax) - Number(a.salaryMax)).slice(0, 3), [allJobs])
+  const areaCountMap = useMemo(() => new Map(areaCounts), [areaCounts])
+  // So sánh cùng đơn vị: lấy các việc trả theo giờ
+  const topPaid = useMemo(() => allJobs.filter((job) => (job.salaryUnit || 'HOUR') === 'HOUR').sort((a, b) => Number(b.salaryMax) - Number(a.salaryMax)).slice(0, 3), [allJobs])
   // Bảng "ca làm trong ngày": các ca có giờ cố định, sắp theo giờ bắt đầu
   const dayBoard = useMemo(() => allJobs.filter(hasWorkTime).sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime)).slice(0, 4), [allJobs])
 
@@ -276,6 +353,7 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
     setQuery('')
     setIndustry('all')
     setLocation('all')
+    setJobType('all')
     setMinSalary('')
     setWindow({ from: '', to: '' })
     setIncludeFlexible(true)
@@ -328,7 +406,8 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
   }
 
   function startEdit(job) {
-    setEditing({ ...job, salaryMin: String(job.salaryMin), salaryMax: String(job.salaryMax), startTime: hhmm(job.startTime), endTime: hhmm(job.endTime) })
+    const place = splitLocation(job.location)
+    setEditing({ ...job, province: place.province, locationDetail: place.detail, employmentType: employmentTypeOf(job), salaryUnit: job.salaryUnit || 'HOUR', salaryMin: String(job.salaryMin), salaryMax: String(job.salaryMax), startTime: hhmm(job.startTime), endTime: hhmm(job.endTime) })
     setError('')
   }
 
@@ -342,7 +421,7 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
       setSelected(null)
       setView('mine')
       clearFilters()
-      setNotice(update ? 'Đã lưu thay đổi tin tuyển dụng.' : 'Đã đăng tin. Tin đang ở trạng thái Đang tuyển.')
+      setNotice(update ? 'Đã lưu thay đổi. Tin đang chờ Quản trị viên duyệt lại.' : 'Đã gửi tin. Tin sẽ hiển thị cho sinh viên sau khi Quản trị viên duyệt.')
       refresh()
     } catch (err) {
       setError(err instanceof TypeError ? 'Không kết nối được Spring Boot.' : err.message)
@@ -388,10 +467,19 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
   const navItems = signedIn
     ? [
         { key: 'home', label: 'Việc làm' },
-        ...(employer ? [{ key: 'mine', label: 'Tin của tôi' }, { key: 'candidates', label: 'Ứng viên' }] : [{ key: 'applications', label: 'Đơn đã ứng tuyển' }]),
+        ...(admin ? [{ key: 'admin', label: 'Duyệt tin' }] : []),
+        ...(employer ? [{ key: 'mine', label: 'Tin của tôi' }, { key: 'candidates', label: 'Ứng viên' }] : []),
+        ...(student ? [{ key: 'applications', label: 'Đơn đã ứng tuyển' }] : []),
         ...(employer || student ? [{ key: 'profile', label: 'Hồ sơ' }] : []),
       ]
     : []
+
+  // Bấm thông báo: đơn ứng tuyển → trang đơn; tin tuyển dụng (duyệt / từ chối) → Tin của tôi / Duyệt tin
+  function openNotification(item) {
+    if (admin) go('admin')
+    else if (employer) go(item.applicationId ? 'candidates' : 'mine')
+    else go('applications')
+  }
 
   const jobList = (
     <>
@@ -427,9 +515,18 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
 
   const filterBar = (
     <div className="filter-bar" role="group" aria-label="Bộ lọc việc làm">
+      <label className="filter-field keyword"><span>Từ khóa</span><span className="keyword-box"><Icon name="search" size={18} /><input type="search" placeholder="Tên việc, ngành nghề, nhà tuyển dụng..." value={query} onChange={(event) => setQuery(event.target.value)} /></span></label>
       <label className="filter-field"><span>Ngành nghề</span><select value={industry} onChange={(event) => setIndustry(event.target.value)}><option value="all">Tất cả</option>{industries.map(([name]) => <option key={name} value={name}>{name}</option>)}</select></label>
-      <label className="filter-field"><span>Khu vực</span><select value={location} onChange={(event) => setLocation(event.target.value)}><option value="all">Tất cả</option>{locations.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-      <label className="filter-field"><span>Lương tối thiểu (VNĐ)</span><input type="number" min="0" step="1000" inputMode="numeric" placeholder="25000" value={minSalary} onChange={(event) => setMinSalary(event.target.value)} /></label>
+      <label className="filter-field"><span>Loại hình</span><select value={jobType} onChange={(event) => setJobType(event.target.value)}><option value="all">Tất cả</option><option value="PART_TIME">Bán thời gian ({typeCounts.PART_TIME})</option><option value="FULL_TIME">Toàn thời gian ({typeCounts.FULL_TIME})</option></select></label>
+      <label className="filter-field"><span>Khu vực</span><select value={location} onChange={(event) => setLocation(event.target.value)}><option value="all">Tất cả</option><AreaOptions counts={areaCountMap} />{otherAreas.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+      <div className="filter-field salary-filter"><span id="filter-salary-label">Thù lao tối thiểu (VNĐ)</span>
+        <span className="salary-pair">
+          <input type="number" min="0" step="1000" inputMode="numeric" aria-labelledby="filter-salary-label" placeholder={SALARY_UNITS[salaryUnit].example[0]} value={minSalary} onChange={(event) => setMinSalary(event.target.value)} />
+          <select aria-label="Đơn vị thù lao" value={salaryUnit} onChange={(event) => setSalaryUnit(event.target.value)}>
+            {Object.entries(SALARY_UNITS).map(([key, unit]) => <option key={key} value={key}>{unit.suffix}</option>)}
+          </select>
+        </span>
+      </div>
       <div className="filter-field wide">
         <span id="filter-time-label">Khung giờ rảnh</span>
         <TimeRangeField id="filter-time" value={window_} onChange={setWindow} compact />
@@ -460,7 +557,7 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
             {signedIn ? (
               <>
                 {employer && <button type="button" className="cta-button small" onClick={postJob}><Icon name="plus" size={16} />Đăng tin</button>}
-                <NotificationBell token={session.accessToken} onOpenItem={() => go(employer ? 'candidates' : 'applications')} />
+                <NotificationBell token={session.accessToken} onOpenItem={openNotification} />
                 <button type="button" className="account-chip" onClick={() => (employer || student) && go('profile')} title={session.email}>
                   <span className="avatar">{session.fullName?.slice(0, 1).toUpperCase() || '?'}</span>
                   <span className="account-text">{session.fullName}<small>{employer ? 'Nhà tuyển dụng' : student ? 'Sinh viên' : 'Quản trị viên'}</small></span>
@@ -484,7 +581,8 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
               <div className="hero-top">
               <div className="hero-copy">
               <h1>{employer ? 'Tuyển sinh viên đúng ca bạn cần.' : 'Việc làm thêm vừa với giờ rảnh của bạn.'}</h1>
-              <p className="hero-lead">{employer ? 'Đăng tin kèm khung giờ làm việc để sinh viên rảnh đúng ca tìm thấy bạn.' : 'Chọn khung giờ bạn rảnh, chúng tôi chỉ hiện những ca làm nằm gọn trong đó.'}</p>
+              <p className="hero-lead">{employer ? 'Đăng tin kèm khung giờ làm việc để sinh viên rảnh đúng ca tìm thấy bạn.' : 'Chọn ngành nghề, khu vực và khung giờ bạn rảnh ở bộ lọc bên dưới, chúng tôi chỉ hiện những ca làm nằm gọn trong đó.'}</p>
+              <button type="button" className="cta-button hero-cta" onClick={() => scrollToId('jobs')}><Icon name="search" size={18} />{employer ? 'Xem việc đang tuyển' : 'Tìm việc phù hợp'}</button>
               <dl className="hero-stats">
                 <div><dt>Việc đang tuyển</dt><dd>{allJobs.length}</dd></div>
                 <div><dt>Nhà tuyển dụng</dt><dd>{employerCount}</dd></div>
@@ -499,7 +597,7 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
                     <li key={job.id}>
                       <button type="button" onClick={() => setSelected(job)}>
                         <span className={`board-time period-bg-${periodOf(job)}`}>{hhmm(job.startTime)}<small>{hhmm(job.endTime)}</small></span>
-                        <span className="board-text"><strong>{job.title}</strong><small>{areaOf(job.location)}</small><em>{salaryLabel(job)}</em></span>
+                        <span className="board-text"><strong>{job.title}</strong><span className="board-sub"><TypeBadge job={job} size="sm" /><small>{areaOf(job.location)}</small></span><em>{salaryLabel(job)}</em></span>
                       </button>
                     </li>
                   ))}
@@ -509,36 +607,6 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
               </aside>
               </div>
 
-              <form className="search-panel" onSubmit={(event) => { event.preventDefault(); scrollToId('jobs') }}>
-                <label className="search-cell grow">
-                  <Icon name="search" />
-                  <input type="search" aria-label="Từ khóa" placeholder="Tên việc, ngành nghề..." value={query} onChange={(event) => setQuery(event.target.value)} />
-                </label>
-                <label className="search-cell">
-                  <Icon name="pin" />
-                  <select aria-label="Khu vực" value={location} onChange={(event) => setLocation(event.target.value)}>
-                    <option value="all">Mọi khu vực</option>
-                    {locations.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
-                </label>
-                <div className="search-cell time-cell">
-                  <Icon name="clock" />
-                  <span className="sr-only" id="hero-time-label">Khung giờ rảnh</span>
-                  <TimeRangeField id="hero-time" value={window_} onChange={setWindow} />
-                </div>
-                <button type="submit" className="cta-button">Tìm việc</button>
-              </form>
-
-              <div className="hero-day">
-                <DayBar from={window_.from} to={window_.to} period={window_.from ? periodOf({ startTime: window_.from, endTime: window_.to }) : 'flex'} size="large" />
-                <p className="hero-day-caption" aria-live="polite">
-                  {!windowValid
-                    ? 'Giờ kết thúc phải sau giờ bắt đầu.'
-                    : window_.from
-                      ? <><strong>{inWindowCount}</strong> ca làm nằm trong {window_.from} – {window_.to}</>
-                      : <><strong>{allJobs.length}</strong> việc đang tuyển. Chọn giờ rảnh để xem ca phù hợp.</>}
-                </p>
-              </div>
             </div>
           </section>
 
@@ -584,7 +652,7 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
               <h2 id="steps-title" className="section-title">Bắt đầu trong 3 bước</h2>
               <ol className="steps">
                 <li className="step-morning"><span className="step-num">1</span><Icon name="clock" size={28} /><strong>Chọn giờ rảnh</strong><p>Đặt khung giờ bạn đi làm được, ví dụ 17:00 – 19:00 sau giờ học.</p></li>
-                <li className="step-afternoon"><span className="step-num">2</span><Icon name="briefcase" size={28} /><strong>Ứng tuyển bằng hồ sơ</strong><p>Liên kết CV trong hồ sơ được điền sẵn, chỉ cần viết vài dòng giới thiệu.</p></li>
+                <li className="step-afternoon"><span className="step-num">2</span><Icon name="briefcase" size={28} /><strong>Ứng tuyển bằng hồ sơ</strong><p>CV (PDF) trong hồ sơ được đính kèm sẵn, chỉ cần viết vài dòng giới thiệu.</p></li>
                 <li className="step-evening"><span className="step-num">3</span><Icon name="check" size={28} /><strong>Nhận kết quả</strong><p>Theo dõi đơn ở mục Đơn đã ứng tuyển: Chờ xét duyệt, Đã chấp nhận hoặc Đã từ chối.</p></li>
               </ol>
             </div>
@@ -601,7 +669,7 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
                 <div className="jobs-main">{jobList}</div>
                 <aside className="jobs-aside">
                   <section className="aside-card">
-                    <h3>Thù lao cao nhất</h3>
+                    <h3>Lương theo giờ cao nhất</h3>
                     <ul className="top-paid">
                       {topPaid.map((job) => (
                         <li key={job.id}><button type="button" onClick={() => setSelected(job)}><IndustryBadge industry={job.industry} size="sm" /><span><strong>{job.title}</strong><small>{salaryLabel(job)}</small></span></button></li>
@@ -622,7 +690,7 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
                   <section className="aside-card tips">
                     <h3>Mẹo ứng tuyển</h3>
                     <ul>
-                      <li>Cập nhật trường, chuyên ngành và liên kết CV trong Hồ sơ trước khi ứng tuyển.</li>
+                      <li>Cập nhật trường, chuyên ngành và tải CV (PDF) lên Hồ sơ trước khi ứng tuyển.</li>
                       <li>Ghi rõ ngày bạn đi làm được trong lời giới thiệu.</li>
                       <li>Mỗi tin chỉ ứng tuyển được một lần, hãy đọc kỹ mô tả.</li>
                     </ul>
@@ -653,7 +721,9 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
         </main>
       ) : (
         <main className="container page">
-          {view === 'profile' ? (
+          {view === 'admin' && admin ? (
+            <AdminPanel session={session} />
+          ) : view === 'profile' ? (
             <ProfilePage session={session} onProfileSaved={onProfileSaved} />
           ) : view === 'applications' || view === 'candidates' ? (
             <ApplicationCenter session={session} employer={employer} jobs={mine} notice={notice} />
@@ -691,7 +761,7 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
           </div>
           <div>
             <h3>Khu vực</h3>
-            {locations.slice(0, 4).map((item) => <button key={item} type="button" onClick={() => { go('home'); setLocation(item); setTimeout(() => scrollToId('jobs'), 0) }}>{item}</button>)}
+            {areaCounts.slice(0, 4).map(([item]) => <button key={item} type="button" onClick={() => { go('home'); setLocation(item); setTimeout(() => scrollToId('jobs'), 0) }}>{item}</button>)}
           </div>
         </div>
         <p className="footer-note">Đồ án Chuyên đề tốt nghiệp 2, Trường Đại học Văn Lang. Xây dựng bằng ReactJS, Spring Boot và MySQL.</p>
@@ -705,24 +775,25 @@ export default function JobMarketplace({ session, intent, flash, onRequestAuth, 
                 <IndustryBadge industry={selected.industry} size="lg" />
                 <div>
                   <h2 id="job-detail-title">{selected.title}</h2>
-                  <span className={`status-pill ${statusOf(selected).className}`}>{statusOf(selected).label}</span>
+                  <span className="detail-pills"><TypeBadge job={selected} /><span className={`status-pill ${statusOf(selected).className}`}>{statusOf(selected).label}</span></span>
                 </div>
               </div>
               <button type="button" className="close-button" aria-label="Đóng" onClick={() => setSelected(null)}><Icon name="close" size={18} /></button>
             </div>
             <div className="job-detail-info">
               <div><small>Ngành nghề</small><strong>{selected.industry}</strong></div>
+              <div><small>Loại hình</small><strong>{EMPLOYMENT_TYPES[employmentTypeOf(selected)].label}</strong></div>
               <div><small>Địa điểm</small><strong>{selected.location}</strong></div>
               <div><small>Thù lao</small><strong className="money">{salaryLabel(selected)}</strong></div>
               <div><small>Khung giờ</small><strong>{workTimeLabel(selected)}</strong><DayBar from={selected.startTime} to={selected.endTime} period={periodOf(selected)} /></div>
-              <div className="span-2"><small>Ngày làm và ghi chú lịch</small><strong>{selected.workSchedule}</strong></div>
+              <div><small>Ngày làm và ghi chú lịch</small><strong>{selected.workSchedule}</strong></div>
               <div className="span-2"><small>Đánh giá nhà tuyển dụng</small><RatingBadge userId={selected.employerId} empty="Nhà tuyển dụng chưa có đánh giá" /></div>
             </div>
             <h3>Mô tả công việc</h3>
             <p className="detail-description">{selected.description}</p>
             <div className="modal-actions">
               <button type="button" className="outline-button" onClick={() => setSelected(null)}>Đóng</button>
-              {!employer && selected.jobStatus === 'OPEN' && <button type="button" className="primary-button" onClick={() => { const job = selected; setSelected(null); apply(job) }}>Ứng tuyển</button>}
+              {!employer && !admin && selected.jobStatus === 'OPEN' && <button type="button" className="primary-button" onClick={() => { const job = selected; setSelected(null); apply(job) }}>Ứng tuyển</button>}
             </div>
           </section>
         </div>
