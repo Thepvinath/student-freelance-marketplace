@@ -75,7 +75,7 @@ export default function AuthModal({ initialMode = 'login', initialRole = 'STUDEN
           <ul>
             <li><Icon name="clock" size={18} />Lọc việc theo khung giờ bạn chọn</li>
             <li><Icon name="check" size={18} />Một lần ứng tuyển cho mỗi tin, trạng thái rõ ràng</li>
-            <li><Icon name="user" size={18} />Nhà tuyển dụng xem hồ sơ và liên kết CV của bạn</li>
+            <li><Icon name="user" size={18} />Nhà tuyển dụng xem hồ sơ và CV (PDF) của bạn</li>
           </ul>
         </aside>
 
