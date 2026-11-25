@@ -1,7 +1,10 @@
 package com.studentfreelance.backend.dto;
 
 import com.studentfreelance.backend.entity.JobPost;
+import com.studentfreelance.backend.entity.EmploymentType;
 import com.studentfreelance.backend.entity.JobStatus;
+import com.studentfreelance.backend.entity.ModerationStatus;
+import com.studentfreelance.backend.entity.SalaryUnit;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -16,10 +19,16 @@ public record JobPostResponse(
     String location,
     BigDecimal salaryMin,
     BigDecimal salaryMax,
+    SalaryUnit salaryUnit,
     String workSchedule,
     LocalTime startTime,
     LocalTime endTime,
+    EmploymentType employmentType,
     JobStatus jobStatus,
+    // FR-12: nhà tuyển dụng thấy tin đang chờ duyệt / bị từ chối và lý do
+    ModerationStatus moderationStatus,
+    String moderationNote,
+    LocalDateTime reviewedAt,
     LocalDateTime createdAt
 ) {
     public static JobPostResponse from(JobPost job) {
@@ -32,10 +41,15 @@ public record JobPostResponse(
             job.getLocation(),
             job.getSalaryMin(),
             job.getSalaryMax(),
+            job.getSalaryUnit(),
             job.getWorkSchedule(),
             job.getStartTime(),
             job.getEndTime(),
+            job.getEmploymentType(),
             job.getJobStatus(),
+            job.getModerationStatus(),
+            job.getModerationNote(),
+            job.getReviewedAt(),
             job.getCreatedAt()
         );
     }

@@ -4,6 +4,7 @@ import com.studentfreelance.backend.dto.*;
 import com.studentfreelance.backend.entity.*;
 import com.studentfreelance.backend.repository.ApplicationRepository;
 import com.studentfreelance.backend.repository.JobPostRepository;
+import com.studentfreelance.backend.repository.UserRepository;
 
 import jakarta.persistence.EntityManager;
 
@@ -21,29 +22,33 @@ public class JobPostService {
     private final ApplicationRepository applications;
     private final EntityManager entityManager;
     private final NotificationService notifications;
+    private final UserRepository users;
 
     public JobPostService(
             JobPostRepository repository,
             ApplicationRepository applications,
             EntityManager entityManager,
-            NotificationService notifications) {
+            NotificationService notifications,
+            UserRepository users) {
         this.repository = repository;
         this.applications = applications;
         this.entityManager = entityManager;
         this.notifications = notifications;
+        this.users = users;
     }
 
-    // Public: list only OPEN jobs
+    // Public: list only OPEN jobs that an ADMIN has approved (FR-12)
     @Transactional(readOnly = true)
     public List<JobPostResponse> getOpenJobs() {
         return repository
-            .findByJobStatusOrderByCreatedAtDesc(JobStatus.OPEN)
+            .findByJobStatusAndModerationStatusOrderByCreatedAtDesc(
+                JobStatus.OPEN, ModerationStatus.APPROVED)
             .stream()
             .map(JobPostResponse::from)
             .toList();
     }
 
-    // Public: view an OPEN job
+    // Public: view an OPEN, approved job
     @Transactional(readOnly = true)
     public JobPostResponse getJob(Long id) {
         JobPost job = repository.findById(id)
@@ -51,7 +56,8 @@ public class JobPostService {
                 HttpStatus.NOT_FOUND, "Job not found"
             ));
 
-        if (job.getJobStatus() != JobStatus.OPEN) {
+        if (job.getJobStatus() != JobStatus.OPEN
+                || job.getModerationStatus() != ModerationStatus.APPROVED) {
             throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND, "Job not found"
             );
@@ -70,7 +76,8 @@ public class JobPostService {
             .toList();
     }
 
-    // Employer: create job
+    // Employer: create job. FR-12: the job waits for ADMIN approval
+    // (PENDING) and is not shown to students until it is APPROVED.
     @Transactional
     public JobPostResponse create(
             JobPostRequest request,
@@ -82,6 +89,7 @@ public class JobPostService {
         JobPost job = new JobPost();
         job.setEmployerId(employerId);
         job.setJobStatus(JobStatus.OPEN);
+        job.setModerationStatus(ModerationStatus.PENDING);
 
         applyRequest(job, request);
 
@@ -90,10 +98,13 @@ public class JobPostService {
         // Reload database-generated created_at
         entityManager.refresh(saved);
 
+        notifyAdmins("Tin mới \u201C" + saved.getTitle() + "\u201D đang chờ duyệt.");
+
         return JobPostResponse.from(saved);
     }
 
-    // Employer: update own OPEN job
+    // Employer: update own OPEN job.
+    // FR-12: edited content must be approved again before it is shown.
     @Transactional
     public JobPostResponse update(
             Long id,
@@ -113,9 +124,15 @@ public class JobPostService {
         validateWorkTime(request);
         applyRequest(job, request);
 
-        return JobPostResponse.from(
-            repository.saveAndFlush(job)
-        );
+        job.setModerationStatus(ModerationStatus.PENDING);
+        job.setModerationNote(null);
+        job.setReviewedBy(null);
+        job.setReviewedAt(null);
+
+        JobPost saved = repository.saveAndFlush(job);
+        notifyAdmins("Tin \u201C" + saved.getTitle() + "\u201D vừa được chỉnh sửa, cần duyệt lại.");
+
+        return JobPostResponse.from(saved);
     }
 
     // Employer: mark own OPEN job as FILLED
@@ -125,10 +142,11 @@ public class JobPostService {
 
         JobPost job = findOwnedJob(id, employerId);
 
-        if (job.getJobStatus() != JobStatus.OPEN) {
+        if (job.getJobStatus() != JobStatus.OPEN
+                || job.getModerationStatus() != ModerationStatus.APPROVED) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "Job is not OPEN"
+                "Job is not OPEN and approved"
             );
         }
 
@@ -184,6 +202,13 @@ public class JobPostService {
         );
     }
 
+    // FR-12: báo cho mọi tài khoản ADMIN (không gắn với đơn ứng tuyển nào)
+    private void notifyAdmins(String message) {
+        for (User admin : users.findByRole(Role.ADMIN)) {
+            notifications.notify(admin.getId(), null, message);
+        }
+    }
+
     private JobPost findOwnedJob(Long id, Long employerId) {
         return repository
             .findByIdAndEmployerId(id, employerId)
@@ -229,8 +254,10 @@ public class JobPostService {
         job.setLocation(request.location().trim());
         job.setSalaryMin(request.salaryMin());
         job.setSalaryMax(request.salaryMax());
+        job.setSalaryUnit(request.salaryUnit());
         job.setWorkSchedule(request.workSchedule().trim());
         job.setStartTime(request.startTime());
         job.setEndTime(request.endTime());
+        job.setEmploymentType(request.employmentType());
     }
 }

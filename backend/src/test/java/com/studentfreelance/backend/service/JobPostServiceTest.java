@@ -4,6 +4,7 @@ import com.studentfreelance.backend.dto.JobPostRequest;
 import com.studentfreelance.backend.entity.*;
 import com.studentfreelance.backend.repository.ApplicationRepository;
 import com.studentfreelance.backend.repository.JobPostRepository;
+import com.studentfreelance.backend.repository.UserRepository;
 
 import jakarta.persistence.EntityManager;
 
@@ -24,12 +25,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-// Unit test (không cần MySQL): quy tắc tin tuyển dụng – FR-05, FR-09, khung giờ Sprint 4
+// Unit test (không cần MySQL): quy tắc tin tuyển dụng – FR-05, FR-09, khung giờ Sprint 4,
+// loại hình và duyệt tin Sprint 5 (FR-12)
 class JobPostServiceTest {
 
     private JobPostRepository jobs;
     private ApplicationRepository applications;
     private NotificationService notifications;
+    private UserRepository users;
     private JobPostService service;
 
     @BeforeEach
@@ -37,12 +40,21 @@ class JobPostServiceTest {
         jobs = mock(JobPostRepository.class);
         applications = mock(ApplicationRepository.class);
         notifications = mock(NotificationService.class);
-        service = new JobPostService(jobs, applications, mock(EntityManager.class), notifications);
+        users = mock(UserRepository.class);
+        service = new JobPostService(jobs, applications, mock(EntityManager.class), notifications, users);
     }
 
     private static JobPostRequest request(LocalTime start, LocalTime end) {
         return new JobPostRequest("Phục vụ ca chiều", "Mô tả", "Dịch vụ ăn uống", "Quận 3, TP. Hồ Chí Minh",
-            new BigDecimal("25000"), new BigDecimal("28000"), "Thứ Hai – thứ Sáu", start, end);
+            new BigDecimal("25000"), new BigDecimal("28000"), SalaryUnit.HOUR, "Thứ Hai – thứ Sáu", start, end,
+            EmploymentType.PART_TIME);
+    }
+
+    private static User admin(long id) {
+        User admin = new User();
+        ReflectionTestUtils.setField(admin, "id", id);
+        admin.setRole(Role.ADMIN);
+        return admin;
     }
 
     private static JobPost job(long id, long employerId, JobStatus status) {
@@ -51,6 +63,7 @@ class JobPostServiceTest {
         job.setEmployerId(employerId);
         job.setTitle("Phục vụ ca chiều");
         job.setJobStatus(status);
+        job.setModerationStatus(ModerationStatus.APPROVED);
         return job;
     }
 
@@ -104,5 +117,46 @@ class JobPostServiceTest {
 
         assertThat(response.jobStatus()).isEqualTo(JobStatus.COMPLETED);
         verify(notifications).notify(eq(1L), eq(55L), contains("đã hoàn thành"));
+    }
+
+    @Test
+    @DisplayName("TC-U14: Đăng tin mới → chờ duyệt (PENDING), lưu loại hình và báo cho ADMIN")
+    void newJobWaitsForAdminApproval() {
+        when(users.findByRole(Role.ADMIN)).thenReturn(List.of(admin(9L)));
+        when(jobs.saveAndFlush(any(JobPost.class))).thenAnswer(call -> call.getArgument(0));
+        JobPostRequest fullTime = new JobPostRequest("Nhân viên văn phòng", "Mô tả", "Văn phòng",
+            "Phường Sài Gòn, TP. Hồ Chí Minh", new BigDecimal("8000000"), new BigDecimal("10000000"),
+            SalaryUnit.MONTH, "Thứ Hai – thứ Sáu", LocalTime.of(8, 0), LocalTime.of(17, 0), EmploymentType.FULL_TIME);
+
+        var response = service.create(fullTime, 3L);
+
+        assertThat(response.moderationStatus()).isEqualTo(ModerationStatus.PENDING);
+        assertThat(response.employmentType()).isEqualTo(EmploymentType.FULL_TIME);
+        assertThat(response.salaryUnit()).isEqualTo(SalaryUnit.MONTH);
+        verify(notifications).notify(eq(9L), isNull(), contains("đang chờ duyệt"));
+    }
+
+    @Test
+    @DisplayName("TC-U15: Trang chủ chỉ lấy tin OPEN đã được duyệt")
+    void publicListOnlyShowsApprovedJobs() {
+        when(jobs.findByJobStatusAndModerationStatusOrderByCreatedAtDesc(JobStatus.OPEN, ModerationStatus.APPROVED))
+            .thenReturn(List.of(job(10, 3, JobStatus.OPEN)));
+
+        assertThat(service.getOpenJobs()).hasSize(1);
+        verify(jobs, never()).findByJobStatusOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    @DisplayName("TC-U16: Sửa tin đã duyệt → quay lại chờ duyệt, xóa lý do cũ")
+    void editingApprovedJobRequiresNewReview() {
+        JobPost approved = job(10, 3, JobStatus.OPEN);
+        approved.setModerationNote("cũ");
+        when(jobs.findByIdAndEmployerId(10L, 3L)).thenReturn(Optional.of(approved));
+        when(jobs.saveAndFlush(approved)).thenReturn(approved);
+
+        var response = service.update(10L, 3L, request(LocalTime.of(17, 0), LocalTime.of(19, 0)));
+
+        assertThat(response.moderationStatus()).isEqualTo(ModerationStatus.PENDING);
+        assertThat(response.moderationNote()).isNull();
     }
 }

@@ -103,6 +103,17 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PATCH, "/api/notifications/*/read", "/api/notifications/read-all")
                     .hasAnyRole("STUDENT", "EMPLOYER", "ADMIN")
 
+                // Sprint 5: CV dạng file PDF – sinh viên tải lên; xem cần đăng nhập
+                // (CvFileService kiểm tra: chủ file, nhà tuyển dụng nhận đơn, ADMIN)
+                .requestMatchers(HttpMethod.POST, "/api/files/cv")
+                    .hasRole("STUDENT")
+                .requestMatchers(HttpMethod.GET, "/api/files/cv/*")
+                    .hasAnyRole("STUDENT", "EMPLOYER", "ADMIN")
+
+                // FR-12: Quản trị viên duyệt / từ chối tin tuyển dụng
+                .requestMatchers("/api/admin/**")
+                    .hasRole("ADMIN")
+
                 // Sprint 5 – triển khai: Spring Boot phục vụ giao diện React đã build
                 // (index.html, JS/CSS/font trong /assets) để web và API dùng chung một địa chỉ.
                 .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.svg", "/icons.svg", "/assets/**")

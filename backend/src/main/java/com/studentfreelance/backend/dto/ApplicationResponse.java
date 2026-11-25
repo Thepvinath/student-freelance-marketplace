@@ -18,5 +18,11 @@ public record ApplicationResponse(
     // FR-10: dùng để hiển thị nút "Đánh giá" khi tin đã COMPLETED
     Long employerId,
     JobStatus jobStatus,
-    boolean reviewedByMe
+    boolean reviewedByMe,
+    // Sprint 5: thông tin liên hệ hai bên – CHỈ có khi đơn đã được chấp nhận (APPROVED),
+    // các trường dưới đây là null với đơn PENDING / REJECTED.
+    String studentPhone,
+    String employerName,
+    String employerEmail,
+    String employerPhone
 ) {}

@@ -1,5 +1,8 @@
 package com.studentfreelance.backend.dto;
 
+import com.studentfreelance.backend.entity.EmploymentType;
+import com.studentfreelance.backend.entity.SalaryUnit;
+
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.LocalTime;
@@ -31,6 +34,10 @@ public record JobPostRequest(
     @Digits(integer = 10, fraction = 2)
     BigDecimal salaryMax,
 
+    // Sprint 5: bắt buộc chọn HOUR (/giờ), SHIFT (/buổi) hoặc MONTH (/tháng)
+    @NotNull
+    SalaryUnit salaryUnit,
+
     @NotBlank
     @Size(max = 255)
     String workSchedule,
@@ -39,6 +46,10 @@ public record JobPostRequest(
     // bỏ trống cả hai = giờ linh hoạt.
     LocalTime startTime,
 
-    LocalTime endTime
+    LocalTime endTime,
+
+    // Sprint 5: bắt buộc chọn PART_TIME hoặc FULL_TIME
+    @NotNull
+    EmploymentType employmentType
 
 ) {}
