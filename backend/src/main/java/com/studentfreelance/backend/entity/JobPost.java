@@ -36,6 +36,11 @@ public class JobPost {
             precision = 12, scale = 2)
     private BigDecimal salaryMax;
 
+    // Sprint 5: thù lao tính theo giờ / buổi / tháng
+    @Enumerated(EnumType.STRING)
+    @Column(name = "salary_unit", nullable = false)
+    private SalaryUnit salaryUnit = SalaryUnit.HOUR;
+
     @Column(name = "work_schedule", nullable = false,
             length = 255)
     private String workSchedule;
@@ -47,9 +52,29 @@ public class JobPost {
     @Column(name = "end_time")
     private LocalTime endTime;
 
+    // Sprint 5: Bán thời gian / Toàn thời gian
+    @Enumerated(EnumType.STRING)
+    @Column(name = "employment_type", nullable = false)
+    private EmploymentType employmentType = EmploymentType.PART_TIME;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "job_status", nullable = false)
     private JobStatus jobStatus = JobStatus.OPEN;
+
+    // FR-12: tin chỉ hiển thị công khai khi ADMIN đã duyệt (APPROVED)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "moderation_status", nullable = false)
+    private ModerationStatus moderationStatus = ModerationStatus.PENDING;
+
+    // Lý do từ chối (chỉ có khi REJECTED)
+    @Column(name = "moderation_note", length = 500)
+    private String moderationNote;
+
+    @Column(name = "reviewed_by")
+    private Long reviewedBy;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
 
     @Column(name = "created_at",
             insertable = false, updatable = false)
@@ -117,6 +142,14 @@ public class JobPost {
         this.salaryMax = salaryMax;
     }
 
+    public SalaryUnit getSalaryUnit() {
+        return salaryUnit;
+    }
+
+    public void setSalaryUnit(SalaryUnit salaryUnit) {
+        this.salaryUnit = salaryUnit;
+    }
+
     public String getWorkSchedule() {
         return workSchedule;
     }
@@ -139,6 +172,46 @@ public class JobPost {
 
     public void setEndTime(LocalTime endTime) {
         this.endTime = endTime;
+    }
+
+    public EmploymentType getEmploymentType() {
+        return employmentType;
+    }
+
+    public void setEmploymentType(EmploymentType employmentType) {
+        this.employmentType = employmentType;
+    }
+
+    public ModerationStatus getModerationStatus() {
+        return moderationStatus;
+    }
+
+    public void setModerationStatus(ModerationStatus moderationStatus) {
+        this.moderationStatus = moderationStatus;
+    }
+
+    public String getModerationNote() {
+        return moderationNote;
+    }
+
+    public void setModerationNote(String moderationNote) {
+        this.moderationNote = moderationNote;
+    }
+
+    public Long getReviewedBy() {
+        return reviewedBy;
+    }
+
+    public void setReviewedBy(Long reviewedBy) {
+        this.reviewedBy = reviewedBy;
+    }
+
+    public LocalDateTime getReviewedAt() {
+        return reviewedAt;
+    }
+
+    public void setReviewedAt(LocalDateTime reviewedAt) {
+        this.reviewedAt = reviewedAt;
     }
 
     public JobStatus getJobStatus() {

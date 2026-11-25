@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
-import java.net.URI;
 
 @Service
 public class ApplicationService {
@@ -21,19 +20,28 @@ public class ApplicationService {
     private final EntityManager entityManager;
     private final NotificationService notifications;
     private final ReviewService reviews;
+    private final StudentProfileRepository studentProfiles;
+    private final EmployerProfileRepository employerProfiles;
+    private final CvFileService cvFiles;
 
     public ApplicationService(ApplicationRepository applications,
                               JobPostRepository jobs,
                               UserRepository users,
                               EntityManager entityManager,
                               NotificationService notifications,
-                              ReviewService reviews) {
+                              ReviewService reviews,
+                              StudentProfileRepository studentProfiles,
+                              EmployerProfileRepository employerProfiles,
+                              CvFileService cvFiles) {
         this.applications = applications;
         this.jobs = jobs;
         this.users = users;
         this.entityManager = entityManager;
         this.notifications = notifications;
         this.reviews = reviews;
+        this.studentProfiles = studentProfiles;
+        this.employerProfiles = employerProfiles;
+        this.cvFiles = cvFiles;
     }
 
     @Transactional
@@ -46,6 +54,10 @@ public class ApplicationService {
 
         JobPost job = jobs.findById(jobId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
+        // FR-12: tin chưa được ADMIN duyệt thì coi như không tồn tại với sinh viên
+        if (job.getModerationStatus() != ModerationStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found");
+        }
         if (job.getJobStatus() != JobStatus.OPEN) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Job is no longer open");
         }
@@ -57,7 +69,7 @@ public class ApplicationService {
         application.setJobId(jobId);
         application.setStudentId(studentId);
         application.setIntroduction(clean(request.introduction()));
-        application.setCvUrl(validateCvUrl(request.cvUrl()));
+        application.setCvUrl(cvFiles.checkCvUrl(request.cvUrl(), studentId)); // Sprint 5: liên kết hoặc file CV đã tải lên
         application.setStatus(ApplicationStatus.PENDING);
 
         try {
@@ -113,7 +125,7 @@ public class ApplicationService {
         // FR-11: báo kết quả cho sinh viên
         notifications.notify(saved.getStudentId(), saved.getId(),
             request.status() == ApplicationStatus.APPROVED
-                ? "Đơn ứng tuyển \u201C" + job.getTitle() + "\u201D đã được chấp nhận."
+                ? "Đơn ứng tuyển \u201C" + job.getTitle() + "\u201D đã được chấp nhận. Xem thông tin liên hệ nhà tuyển dụng trong mục Đơn đã ứng tuyển."
                 : "Đơn ứng tuyển \u201C" + job.getTitle() + "\u201D chưa được chấp nhận.");
         return toResponse(saved, false);
     }
@@ -128,31 +140,35 @@ public class ApplicationService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
         User student = users.findById(application.getStudentId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Student not found"));
+
+        // Sprint 5: hai bên chỉ thấy số điện thoại / email của nhau sau khi đơn được chấp nhận.
+        String studentPhone = null;
+        String employerName = null;
+        String employerEmail = null;
+        String employerPhone = null;
+        if (application.getStatus() == ApplicationStatus.APPROVED) {
+            studentPhone = studentProfiles.findById(student.getId())
+                .map(StudentProfile::getPhone).orElse(null);
+            User employer = users.findById(job.getEmployerId()).orElse(null);
+            EmployerProfile profile = employerProfiles.findById(job.getEmployerId()).orElse(null);
+            employerEmail = employer == null ? null : employer.getEmail();
+            employerPhone = profile == null ? null : profile.getContactPhone();
+            employerName = profile != null && profile.getOrganizationName() != null
+                    && !profile.getOrganizationName().isBlank()
+                ? profile.getOrganizationName()
+                : employer == null ? null : employer.getFullName();
+        }
+
         return new ApplicationResponse(
             application.getId(), job.getId(), job.getTitle(),
             student.getId(), student.getFullName(), student.getEmail(),
             application.getIntroduction(), application.getCvUrl(),
             application.getStatus(), application.getAppliedAt(),
-            job.getEmployerId(), job.getJobStatus(), reviewedByMe
+            job.getEmployerId(), job.getJobStatus(), reviewedByMe,
+            studentPhone, employerName, employerEmail, employerPhone
         );
     }
 
-    private static String validateCvUrl(String value) {
-        String url = clean(value);
-        if (url == null) return null;
-        try {
-            URI parsed = URI.create(url);
-            String scheme = parsed.getScheme();
-            if (parsed.getHost() != null && scheme != null &&
-                (scheme.equalsIgnoreCase("https") || scheme.equalsIgnoreCase("http"))) {
-                return url;
-            }
-        } catch (IllegalArgumentException ignored) {
-            // Convert invalid URLs to a useful 400 response below.
-        }
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-            "cvUrl must be an http(s) URL");
-    }
 
     private static String clean(String value) {
         return value == null || value.isBlank() ? null : value.trim();

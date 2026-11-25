@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.net.URI;
 
 @Service
 public class ProfileService {
@@ -23,13 +22,16 @@ public class ProfileService {
     private final UserRepository users;
     private final StudentProfileRepository studentProfiles;
     private final EmployerProfileRepository employerProfiles;
+    private final CvFileService cvFiles;
 
     public ProfileService(UserRepository users,
                           StudentProfileRepository studentProfiles,
-                          EmployerProfileRepository employerProfiles) {
+                          EmployerProfileRepository employerProfiles,
+                          CvFileService cvFiles) {
         this.users = users;
         this.studentProfiles = studentProfiles;
         this.employerProfiles = employerProfiles;
+        this.cvFiles = cvFiles;
     }
 
     // GET: a missing profile row returns empty fields (not 404)
@@ -66,7 +68,7 @@ public class ProfileService {
             profile.setPhone(clean(request.phone()));
             profile.setSchool(clean(request.school()));
             profile.setMajor(clean(request.major()));
-            profile.setCvUrl(validateCvUrl(request.cvUrl()));
+            profile.setCvUrl(cvFiles.checkCvUrl(request.cvUrl(), userId)); // Sprint 5: liên kết hoặc file CV đã tải lên
             profile.setIntroduction(clean(request.introduction()));
             return toResponse(user, studentProfiles.save(profile));
         }
@@ -104,22 +106,6 @@ public class ProfileService {
     }
 
     // Same rule as ApplicationService: only http(s) URLs
-    private static String validateCvUrl(String value) {
-        String url = clean(value);
-        if (url == null) return null;
-        try {
-            URI parsed = URI.create(url);
-            String scheme = parsed.getScheme();
-            if (parsed.getHost() != null && scheme != null &&
-                (scheme.equalsIgnoreCase("https") || scheme.equalsIgnoreCase("http"))) {
-                return url;
-            }
-        } catch (IllegalArgumentException ignored) {
-            // handled below
-        }
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-            "cvUrl must be an http(s) URL");
-    }
 
     private static String clean(String value) {
         return value == null || value.isBlank() ? null : value.trim();
