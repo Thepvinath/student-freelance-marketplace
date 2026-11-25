@@ -54,8 +54,11 @@ CREATE TABLE IF NOT EXISTS `employer_profiles` (
   CONSTRAINT `fk_employer_profiles_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 4. job_posts: Tin tuyển dụng – FR-05, FR-06, FR-09
+-- 4. job_posts: Tin tuyển dụng – FR-05, FR-06, FR-09, FR-12
 --    start_time / end_time: khung giờ làm việc để lọc theo giờ rảnh (NULL = giờ linh hoạt)
+--    employment_type: PART_TIME (bán thời gian) / FULL_TIME (toàn thời gian) – Sprint 5
+--    salary_unit: thù lao tính theo HOUR (giờ) / SHIFT (buổi) / MONTH (tháng) – Sprint 5
+--    moderation_*, reviewed_*: ADMIN duyệt tin trước khi hiển thị – Sprint 5
 CREATE TABLE IF NOT EXISTS `job_posts` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `employer_id` bigint NOT NULL,
@@ -65,16 +68,25 @@ CREATE TABLE IF NOT EXISTS `job_posts` (
   `location` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
   `salary_min` decimal(12,2) NOT NULL,
   `salary_max` decimal(12,2) NOT NULL,
+  `salary_unit` enum('HOUR','SHIFT','MONTH') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'HOUR',
   `work_schedule` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `start_time` time DEFAULT NULL,
   `end_time` time DEFAULT NULL,
+  `employment_type` enum('PART_TIME','FULL_TIME') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PART_TIME',
   `job_status` enum('OPEN','FILLED','COMPLETED') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'OPEN',
+  `moderation_status` enum('PENDING','APPROVED','REJECTED') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
+  `moderation_note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `reviewed_by` bigint DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_job_posts_employer` (`employer_id`),
   KEY `idx_job_posts_search` (`job_status`,`industry`,`location`),
   KEY `idx_job_posts_created_at` (`created_at`),
+  KEY `idx_job_posts_moderation` (`moderation_status`,`job_status`),
+  KEY `fk_job_posts_reviewer` (`reviewed_by`),
   CONSTRAINT `fk_job_posts_employer` FOREIGN KEY (`employer_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_job_posts_reviewer` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `chk_job_posts_salary` CHECK (((`salary_min` >= 0) and (`salary_max` >= `salary_min`))),
   CONSTRAINT `chk_job_posts_work_time` CHECK (((`start_time` is null) and (`end_time` is null)) or ((`start_time` is not null) and (`end_time` is not null) and (`end_time` > `start_time`)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -130,5 +142,20 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   CONSTRAINT `fk_notifications_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Kiểm tra: phải có đủ 7 bảng
+-- 8. cv_files: File CV (PDF) sinh viên tải lên, lưu trong CSDL – Sprint 5
+CREATE TABLE IF NOT EXISTS `cv_files` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `owner_id` bigint NOT NULL,
+  `file_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `content_type` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `size_bytes` int NOT NULL,
+  `data` mediumblob NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_cv_files_owner` (`owner_id`),
+  CONSTRAINT `fk_cv_files_owner` FOREIGN KEY (`owner_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `chk_cv_files_size` CHECK (((`size_bytes` > 0) and (`size_bytes` <= 5242880)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Kiểm tra: phải có đủ 8 bảng
 SHOW TABLES;
